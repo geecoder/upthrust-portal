@@ -28,13 +28,25 @@ export default async function DashboardPage() {
   const isAdmin = userId === process.env.ADMIN_USER_ID;
   const db = createAdminClient();
 
-  const { data: learner } = await db.from('learners').select('*').eq('clerk_user_id', userId).single();
+  let learner = null;
+  let weeks = null;
+  let assignments = null;
+  let announcements = null;
+  try {
+    [{ data: learner }, { data: weeks }, { data: announcements }] = await Promise.all([
+      db.from('learners').select('*').eq('clerk_user_id', userId).single(),
+      db.from('weeks').select('*').eq('is_published', true).order('week_number'),
+      db.from('announcements').select('*').eq('is_published', true).order('created_at', { ascending: false }).limit(3),
+    ]);
+    if (learner) {
+      ({ data: assignments } = await db.from('assignments').select('*').eq('learner_id', (learner as Learner).id));
+    }
+  } catch {
+    // Supabase unavailable or schema not set up — render with empty data
+  }
+
   const typedLearner = learner as Learner | null;
   const pathway = typedLearner?.pathway === 'PM' || typedLearner?.pathway === 'BA' ? typedLearner.pathway : 'PM';
-
-  const { data: weeks } = await db.from('weeks').select('*').eq('is_published', true).order('week_number');
-  const { data: assignments } = learner ? await db.from('assignments').select('*').eq('learner_id', learner.id) : { data: [] };
-  const { data: announcements } = await db.from('announcements').select('*').eq('is_published', true).order('created_at', { ascending: false }).limit(3);
 
   const typedWeeks = (weeks || []) as Week[];
   const typedAssignments = (assignments || []) as Assignment[];

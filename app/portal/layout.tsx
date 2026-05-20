@@ -14,11 +14,17 @@ export default async function PortalLayout({ children }: { children: React.React
   const isAdmin = userId === process.env.ADMIN_USER_ID;
 
   // Get learner data
-  const { data: learner } = await adminClient
-    .from('learners')
-    .select('*')
-    .eq('clerk_user_id', userId)
-    .single();
+  let learner = null;
+  try {
+    const { data } = await adminClient
+      .from('learners')
+      .select('*')
+      .eq('clerk_user_id', userId)
+      .single();
+    learner = data;
+  } catch {
+    // Supabase unavailable or table missing — fall through to pending page
+  }
 
   // If not Genesis and no learner record — show pending page
   if (!isAdmin && !learner) {
