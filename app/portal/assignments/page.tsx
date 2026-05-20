@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { supabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase';
 import type { Assignment, Week } from '@/lib/types';
 import Link from 'next/link';
 
@@ -18,12 +18,12 @@ export default function AssignmentsPage() {
   useEffect(() => {
     if (!user) return;
     async function load() {
-      const { data: l } = await supabase.from('learners').select('*').eq('clerk_user_id', user!.id).single();
+      const { data: l } = await createBrowserClient().from('learners').select('*').eq('clerk_user_id', user!.id).single();
       setLearner(l);
       if (!l) return;
-      const { data: a } = await supabase.from('assignments').select('*').eq('learner_id', l.id);
+      const { data: a } = await createBrowserClient().from('assignments').select('*').eq('learner_id', l.id);
       setAssignments(a || []);
-      const { data: w } = await supabase.from('weeks').select('*').eq('is_published', true).order('week_number');
+      const { data: w } = await createBrowserClient().from('weeks').select('*').eq('is_published', true).order('week_number');
       setWeeks(w || []);
     }
     load();
@@ -41,12 +41,12 @@ export default function AssignmentsPage() {
     };
 
     if (existing) {
-      await supabase.from('assignments').update(payload).eq('id', existing.id);
+      await createBrowserClient().from('assignments').update(payload).eq('id', existing.id);
     } else {
-      await supabase.from('assignments').insert(payload);
+      await createBrowserClient().from('assignments').insert(payload);
     }
 
-    const { data: a } = await supabase.from('assignments').select('*').eq('learner_id', learner.id);
+    const { data: a } = await createBrowserClient().from('assignments').select('*').eq('learner_id', learner.id);
     setAssignments(a || []);
     setSubmitting(null);
     setSubmitUrl('');

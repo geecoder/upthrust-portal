@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { createAdminClient } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase';
 import { PROGRAM } from '@/lib/types';
 
 export default function CohortPage() {
@@ -12,7 +12,7 @@ export default function CohortPage() {
   async function postAnnouncement() {
     if (!announcementTitle || !announcementContent) return;
     setSaving(true);
-    const db = createAdminClient();
+    const db = createBrowserClient();
     await db.from('announcements').insert({ title: announcementTitle, content: announcementContent, priority, is_published: true });
     setAnnouncementTitle('');
     setAnnouncementContent('');

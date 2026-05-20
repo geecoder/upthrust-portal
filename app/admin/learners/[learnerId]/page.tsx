@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { createAdminClient } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase';
 import type { Learner, Assignment, Week } from '@/lib/types';
 import Link from 'next/link';
 
@@ -15,7 +15,7 @@ export default function AdminLearnerPage() {
   const [scoreText, setScoreText] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const db = createAdminClient();
+  const db = createBrowserClient();
 
   useEffect(() => {
     async function load() {

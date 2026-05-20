@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { supabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase';
 import type { PortfolioItem } from '@/lib/types';
 
 export default function PortfolioPage() {
@@ -15,10 +15,10 @@ export default function PortfolioPage() {
   useEffect(() => {
     if (!user) return;
     async function load() {
-      const { data: l } = await supabase.from('learners').select('*').eq('clerk_user_id', user!.id).single();
+      const { data: l } = await createBrowserClient().from('learners').select('*').eq('clerk_user_id', user!.id).single();
       setLearner(l);
       if (!l) return;
-      const { data: i } = await supabase.from('portfolio_items').select('*').eq('learner_id', l.id).order('week_number');
+      const { data: i } = await createBrowserClient().from('portfolio_items').select('*').eq('learner_id', l.id).order('week_number');
       setItems(i || []);
     }
     load();
@@ -27,7 +27,7 @@ export default function PortfolioPage() {
   async function handleSave() {
     if (!learner || !form.title || !form.url) return;
     setSaving(true);
-    await supabase.from('portfolio_items').insert({
+    await createBrowserClient().from('portfolio_items').insert({
       learner_id: learner.id,
       title: form.title,
       description: form.description,
@@ -36,7 +36,7 @@ export default function PortfolioPage() {
       week_number: form.week_number ? parseInt(form.week_number) : null,
       status: 'Draft',
     });
-    const { data: i } = await supabase.from('portfolio_items').select('*').eq('learner_id', learner.id).order('week_number');
+    const { data: i } = await createBrowserClient().from('portfolio_items').select('*').eq('learner_id', learner.id).order('week_number');
     setItems(i || []);
     setForm({ title: '', description: '', artefact_type: '', url: '', week_number: '' });
     setAdding(false);

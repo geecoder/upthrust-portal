@@ -1,42 +1,47 @@
 import { auth } from '@clerk/nextjs/server';
-import { createServiceClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
-export async function GET(req: Request, { params }: { params: { week: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ week: string }> }) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const weekNumber = parseInt(params.week);
+  const { week: weekParam } = await params;
+  const weekNumber = parseInt(weekParam);
   if (isNaN(weekNumber) || weekNumber < 0 || weekNumber > 12) {
-    return NextResponse.json({ error: 'Invalid week' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid week number' }, { status: 400 });
   }
 
-  const db = createServiceClient();
+  const db = createAdminClient();
 
-  // Get week
-  const { data: week } = await db
-    .from('weeks').select('*').eq('week_number', weekNumber).single();
+  const { data: week, error } = await db
+    .from('weeks')
+    .select('*')
+    .eq('week_number', weekNumber)
+    .eq('is_published', true)
+    .single();
 
-  if (!week || !week.is_unlocked) {
-    return NextResponse.json({ error: 'Week not found or locked' }, { status: 404 });
+  if (error || !week) {
+    return NextResponse.json({ error: 'Week not found or not published' }, { status: 404 });
   }
 
-  // Get learner
   const { data: learner } = await db
-    .from('learners').select('id, pathway').eq('clerk_user_id', userId).single();
+    .from('learners')
+    .select('id, pathway')
+    .eq('clerk_user_id', userId)
+    .single();
 
-  // Get submission if learner exists
-  let submission = null;
+  let assignment = null;
   if (learner) {
     const { data } = await db
-      .from('submissions').select('*')
+      .from('assignments')
+      .select('*')
       .eq('learner_id', learner.id)
       .eq('week_number', weekNumber)
-      .order('submitted_at', { ascending: false })
-      .limit(1)
+      .eq('pathway', learner.pathway || 'PM')
       .single();
-    submission = data;
+    assignment = data;
   }
 
-  return NextResponse.json({ week, submission, learner });
+  return NextResponse.json({ week, assignment, learner });
 }

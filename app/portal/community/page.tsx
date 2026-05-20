@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { supabase } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase';
 import type { CommunityPost } from '@/lib/types';
 
 const CATEGORIES = ['General', 'Question', 'Win', 'Portfolio Review'] as const;
@@ -19,9 +19,9 @@ export default function CommunityPage() {
   useEffect(() => {
     if (!user) return;
     async function load() {
-      const { data: l } = await supabase.from('learners').select('*').eq('clerk_user_id', user!.id).single();
+      const { data: l } = await createBrowserClient().from('learners').select('*').eq('clerk_user_id', user!.id).single();
       setLearner(l);
-      const { data: p } = await supabase.from('community_posts').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
+      const { data: p } = await createBrowserClient().from('community_posts').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
       setPosts(p || []);
     }
     load();
@@ -30,13 +30,13 @@ export default function CommunityPage() {
   async function handlePost() {
     if (!learner || !newPost.trim()) return;
     setPosting(true);
-    await supabase.from('community_posts').insert({
+    await createBrowserClient().from('community_posts').insert({
       learner_id: learner.id,
       author_name: `${learner.first_name} ${learner.last_name || ''}`.trim(),
       category: newCategory,
       content: newPost.trim(),
     });
-    const { data: p } = await supabase.from('community_posts').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
+    const { data: p } = await createBrowserClient().from('community_posts').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
     setPosts(p || []);
     setNewPost('');
     setPosting(false);

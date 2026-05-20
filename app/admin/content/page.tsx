@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { createAdminClient } from '@/lib/supabase';
+import { createBrowserClient } from '@/lib/supabase';
 import type { Week } from '@/lib/types';
 import { PHASE_COLORS } from '@/lib/types';
 
@@ -9,7 +9,7 @@ export default function ContentPage() {
   const [editing, setEditing] = useState<Week | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const db = createAdminClient();
+  const db = createBrowserClient();
 
   useEffect(() => {
     db.from('weeks').select('*').order('week_number').then(({ data }) => setWeeks(data || []));

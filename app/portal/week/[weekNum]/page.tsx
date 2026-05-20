@@ -5,9 +5,10 @@ import Link from 'next/link';
 import type { Week } from '@/lib/types';
 import { PHASE_COLORS } from '@/lib/types';
 
-export default async function WeekDetailPage({ params }: { params: { weekNum: string } }) {
+export default async function WeekDetailPage({ params }: { params: Promise<{ weekNum: string }> }) {
   const { userId } = await auth();
-  const weekNum = parseInt(params.weekNum);
+  const { weekNum: weekNumStr } = await params;
+  const weekNum = parseInt(weekNumStr);
   if (isNaN(weekNum) || weekNum < 0 || weekNum > 12) notFound();
 
   const db = createAdminClient();
