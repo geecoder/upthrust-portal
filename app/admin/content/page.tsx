@@ -1,4 +1,6 @@
 'use client';
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@/lib/supabase';
 import type { Week } from '@/lib/types';

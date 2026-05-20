@@ -1,4 +1,6 @@
-import { auth, currentUser } from '@clerk/nextjs/server';
+export const dynamic = 'force-dynamic';
+
+import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase';
 import Sidebar from '@/components/Sidebar';

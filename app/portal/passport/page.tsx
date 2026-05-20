@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import type { Learner, Assignment } from '@/lib/types';

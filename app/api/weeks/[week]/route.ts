@@ -1,27 +1,34 @@
+export const dynamic = 'force-dynamic';
+
 import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
-export async function GET(req: Request, { params }: { params: Promise<{ week: string }> }) {
+// Next.js 15: params must be typed as Promise and awaited
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ week: string }> }
+) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { week: weekParam } = await params;
-  const weekNumber = parseInt(weekParam);
+  const { week } = await params;
+  const weekNumber = parseInt(week);
+
   if (isNaN(weekNumber) || weekNumber < 0 || weekNumber > 12) {
     return NextResponse.json({ error: 'Invalid week number' }, { status: 400 });
   }
 
   const db = createAdminClient();
 
-  const { data: week, error } = await db
+  const { data: weekData, error } = await db
     .from('weeks')
     .select('*')
     .eq('week_number', weekNumber)
     .eq('is_published', true)
     .single();
 
-  if (error || !week) {
+  if (error || !weekData) {
     return NextResponse.json({ error: 'Week not found or not published' }, { status: 404 });
   }
 
@@ -43,5 +50,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ week: st
     assignment = data;
   }
 
-  return NextResponse.json({ week, assignment, learner });
+  return NextResponse.json({ week: weekData, assignment, learner });
 }
