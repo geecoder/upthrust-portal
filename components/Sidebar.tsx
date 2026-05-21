@@ -14,6 +14,12 @@ const LEARNER_NAV = [
   { href: '/portal/resources', label: 'Resources', icon: '📚' },
 ];
 
+const AI_NAV = [
+  { href: '/portal/simulation', label: 'Stakeholder Sim', icon: '🎭' },
+  { href: '/portal/interview', label: 'Interview Coach', icon: '💼' },
+  { href: '/portal/writing-check', label: 'Writing Checker', icon: '✍️' },
+];
+
 const ADMIN_NAV = [
   { href: '/admin', label: 'All Learners', icon: '👥', exact: true },
   { href: '/admin/content', label: 'Manage Content', icon: '✏️' },
@@ -142,6 +148,27 @@ export default function Sidebar({
             key={href}
             href={href}
             className={`sidebar-link${isActive(href, exact) ? ' active' : ''}`}
+          >
+            <span className="sidebar-icon">{icon}</span>
+            {label}
+          </Link>
+        ))}
+
+        {/* AI Practice Lab */}
+        <div style={{ height: 1, background: 'rgba(250,247,241,0.1)', margin: '10px 20px' }} />
+        <p style={{
+          padding: '4px 20px 6px',
+          fontSize: '0.5625rem', fontWeight: 700,
+          letterSpacing: '0.14em', textTransform: 'uppercase',
+          color: 'rgba(250,247,241,0.3)',
+        }}>
+          AI Practice Lab
+        </p>
+        {AI_NAV.map(({ href, label, icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={`sidebar-link${isActive(href) ? ' active' : ''}`}
           >
             <span className="sidebar-icon">{icon}</span>
             {label}
