@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { createAdminClient } from '@/lib/supabase';
 import type { Learner, Assignment } from '@/lib/types';
 import { PASSPORT_CRITERIA, PROGRAM } from '@/lib/types';
 import Link from 'next/link';

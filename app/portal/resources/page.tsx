@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { createAdminClient } from '@/lib/supabase';
 import type { Week } from '@/lib/types';
 
 const TEMPLATES = [
@@ -75,14 +75,11 @@ export default async function ResourcesPage() {
             <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.25rem', fontWeight: 500, marginBottom: 16 }}>🛠️ Tools</h2>
             <div className="card" style={{ padding: 0 }}>
               {TOOLS.map((tool, i) => (
-                <a key={i} href={tool.url} target="_blank" rel="noopener noreferrer" style={{
+                <a key={i} href={tool.url} target="_blank" rel="noopener noreferrer" className="tool-link" style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '12px 20px', borderBottom: i < TOOLS.length - 1 ? '1px solid var(--paper-line)' : 'none',
                   textDecoration: 'none', transition: 'background 150ms',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--paper-soft)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                >
+                }}>
                   <div>
                     <p style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--ink)' }}>{tool.name}</p>
                     <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>{tool.purpose}</p>

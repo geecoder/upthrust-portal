@@ -214,3 +214,17 @@ tr:hover td { background: var(--paper-soft); }
 .delay-2 { animation-delay: 120ms; }
 .delay-3 { animation-delay: 180ms; }
 .delay-4 { animation-delay: 240ms; }
+
+/* ── Hover states (replaces inline onMouseEnter/onMouseLeave) ── */
+.week-card:hover {
+  box-shadow: 0 4px 20px -8px rgba(15,26,46,0.15);
+}
+.quick-link:hover {
+  background: var(--paper-soft) !important;
+}
+.tool-link:hover {
+  background: var(--paper-soft);
+}
+.card:hover .card-hover-target {
+  background: var(--paper-soft);
+}

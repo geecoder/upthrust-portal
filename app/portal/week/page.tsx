@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { createAdminClient } from '@/lib/supabase';
 import Link from 'next/link';
 import type { Week } from '@/lib/types';
 import { PHASE_COLORS } from '@/lib/types';
@@ -27,15 +27,12 @@ export default async function WeekListPage() {
           const isPast = week.week_number < currentWeek;
           return (
             <Link key={week.week_number} href={`/portal/week/${week.week_number}`} style={{ textDecoration: 'none' }}>
-              <div className="card" style={{
+              <div className="card week-card" style={{
                 borderTop: `3px solid ${color}`,
                 opacity: !week.is_published ? 0.5 : 1,
                 background: isCurrent ? 'var(--paper-soft)' : 'var(--white)',
                 transition: 'box-shadow 200ms',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px -8px rgba(15,26,46,0.15)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-              >
+              }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>Week {week.week_number}</span>
                   <div style={{ display: 'flex', gap: 4 }}>

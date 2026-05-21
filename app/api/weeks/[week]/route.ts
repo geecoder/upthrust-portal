@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
 // Next.js 15: params must be typed as Promise and awaited
