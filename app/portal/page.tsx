@@ -247,10 +247,12 @@ export default async function DashboardPage() {
                 { href: '/portal/resources', label: '📚 Resource Library', sub: 'Templates + recordings' },
                 { href: '/portal/portfolio', label: '💼 My Portfolio', sub: `${approvedCount} artefacts` },
               ].map(({ href, label, sub }) => (
-                <Link key={href} href={href} className="quick-link" style={{
+                <Link key={href} href={href} style={{
                   display: 'flex', flexDirection: 'column', padding: '10px 12px',
                   borderRadius: 6, textDecoration: 'none', transition: 'background 150ms',
-                }}>
+                }}
+
+                >
                   <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--ink)' }}>{label}</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>{sub}</span>
                 </Link>

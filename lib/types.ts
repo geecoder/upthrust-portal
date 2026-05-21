@@ -30,6 +30,9 @@ export interface Learner {
   notes?: string;
   linkedin_url?: string;
   avatar_url?: string;
+  passport_id?: string;
+  onboarding_complete?: boolean;
+  onboarding_completed_at?: string;
   created_at: string;
   updated_at: string;
 }
