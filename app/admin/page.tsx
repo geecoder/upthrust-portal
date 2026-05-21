@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { createAdminClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import Link from 'next/link';
 import type { Learner } from '@/lib/types';
 

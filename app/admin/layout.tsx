@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { createAdminClient } from '@/lib/supabase';
 import Sidebar from '@/components/Sidebar';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

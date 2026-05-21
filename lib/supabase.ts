@@ -1,24 +1,17 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseUrl } from './supabase-url';
 
-// ── IMPORTANT ──────────────────────────────────────────────────
+// IMPORTANT
 // Never call createClient() at module top level.
-// Next.js evaluates module exports at build time — env vars don't
+// Next.js evaluates module exports at build time, and env vars may not
 // exist then, causing "supabaseUrl is required" build errors.
 // Always create clients inside functions/components/handlers.
-
 export function createBrowserClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key);
-}
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export function createAdminClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+  if (!key) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  }
 
-// Alias used in some API routes
-export const createServiceClient = createAdminClient;
+  return createClient(getSupabaseUrl(), key);
+}

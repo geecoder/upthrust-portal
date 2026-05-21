@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { createAdminClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import Sidebar from '@/components/Sidebar';
 import type { Learner } from '@/lib/types';
 
@@ -15,18 +15,41 @@ export default async function PortalLayout({ children }: { children: React.React
 
   // Get learner data
   let learner = null;
+  let learnerLoadFailed = false;
   try {
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from('learners')
       .select('*')
       .eq('clerk_user_id', userId)
-      .single();
-    learner = data;
-  } catch {
+      .maybeSingle();
+
+    if (error) {
+      learnerLoadFailed = true;
+      console.error('Portal layout learner query failed:', error.message);
+    } else {
+      learner = data;
+    }
+  } catch (error) {
+    learnerLoadFailed = true;
+    console.error('Portal layout Supabase load failed:', error);
     // Supabase unavailable or table missing — fall through to pending page
   }
 
   // If not Genesis and no learner record — show pending page
+  if (!isAdmin && learnerLoadFailed) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper-soft)', padding: 24 }}>
+        <div style={{ maxWidth: 480, textAlign: 'center' }}>
+          <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.75rem', marginBottom: 12 }}>Portal temporarily unavailable</h1>
+          <p style={{ color: 'var(--ink-muted)', lineHeight: 1.6, marginBottom: 24 }}>
+            We could not load your portal access just now. Please refresh in a moment, or email <strong>info@upthrustdigital.com</strong> if it continues.
+          </p>
+          <a href="mailto:info@upthrustdigital.com" className="btn btn-primary">Contact Support</a>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAdmin && !learner) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper-soft)', padding: 24 }}>

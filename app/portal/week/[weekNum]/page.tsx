@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
-import { createAdminClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { Week } from '@/lib/types';

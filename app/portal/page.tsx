@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { createAdminClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
 import Link from 'next/link';
 import type { Learner, Assignment, Week, Announcement } from '@/lib/types';
 import { PASSPORT_CRITERIA, PHASE_COLORS } from '@/lib/types';
@@ -28,29 +28,70 @@ export default async function DashboardPage() {
   const isAdmin = userId === process.env.ADMIN_USER_ID;
   const db = createAdminClient();
 
-  let learner = null;
-  let weeks = null;
-  let assignments = null;
-  let announcements = null;
+  let learner: Learner | null = null;
+  let weeks: Week[] = [];
+  let assignments: Assignment[] = [];
+  let announcements: Announcement[] = [];
+  let dashboardDataError = false;
   try {
-    [{ data: learner }, { data: weeks }, { data: announcements }] = await Promise.all([
-      db.from('learners').select('*').eq('clerk_user_id', userId).single(),
+    const learnerResult = await db
+      .from('learners')
+      .select('*')
+      .eq('clerk_user_id', userId)
+      .maybeSingle();
+
+    if (learnerResult.error) {
+      dashboardDataError = true;
+      console.error('Portal learner query failed:', learnerResult.error.message);
+    } else {
+      learner = learnerResult.data as Learner | null;
+    }
+
+    const [weeksResult, announcementsResult] = await Promise.all([
       db.from('weeks').select('*').eq('is_published', true).order('week_number'),
       db.from('announcements').select('*').eq('is_published', true).order('created_at', { ascending: false }).limit(3),
     ]);
-    if (learner) {
-      ({ data: assignments } = await db.from('assignments').select('*').eq('learner_id', (learner as Learner).id));
+
+    if (weeksResult.error) {
+      dashboardDataError = true;
+      console.error('Portal weeks query failed:', weeksResult.error.message);
+    } else {
+      weeks = (weeksResult.data || []) as Week[];
     }
-  } catch {
+
+    if (announcementsResult.error) {
+      dashboardDataError = true;
+      console.error('Portal announcements query failed:', announcementsResult.error.message);
+    } else {
+      announcements = (announcementsResult.data || []) as Announcement[];
+    }
+
+    if (learner) {
+      const assignmentsResult = await db.from('assignments').select('*').eq('learner_id', learner.id);
+
+      if (assignmentsResult.error) {
+        dashboardDataError = true;
+        console.error('Portal assignments query failed:', assignmentsResult.error.message);
+      } else {
+        assignments = (assignmentsResult.data || []) as Assignment[];
+      }
+    }
+  } catch (error) {
+    dashboardDataError = true;
+    console.error('Portal Supabase load failed:', error);
     // Supabase unavailable or schema not set up — render with empty data
   }
 
-  const typedLearner = learner as Learner | null;
+  if (!isAdmin && !learner) {
+    return null;
+  }
+
+  const typedLearner = learner;
   const pathway = typedLearner?.pathway === 'PM' || typedLearner?.pathway === 'BA' ? typedLearner.pathway : 'PM';
 
-  const typedWeeks = (weeks || []) as Week[];
-  const typedAssignments = (assignments || []) as Assignment[];
-  const typedAnnouncements = (announcements || []) as Announcement[];
+  const typedWeeks = weeks;
+  const typedAssignments = assignments;
+  const typedAnnouncements = announcements;
 
   const currentWeek = getCurrentWeek();
   const thisWeek = typedWeeks.find(w => w.week_number === currentWeek);
@@ -87,6 +128,15 @@ export default async function DashboardPage() {
           </p>
         )}
       </div>
+
+      {dashboardDataError && (
+        <div className="card fade-up delay-1" style={{ marginBottom: 24, borderLeft: '3px solid var(--amber)' }}>
+          <p style={{ fontWeight: 700, fontSize: '0.9375rem' }}>Some dashboard data is temporarily unavailable.</p>
+          <p style={{ color: 'var(--ink-muted)', fontSize: '0.875rem', marginTop: 4 }}>
+            You can keep using the portal while we retry the missing data on your next refresh.
+          </p>
+        </div>
+      )}
 
       {/* Announcements */}
       {typedAnnouncements.length > 0 && (
