@@ -69,7 +69,7 @@ Please review this text for writing quality and professional presentation.`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 700,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }]

@@ -122,7 +122,7 @@ export default function AdminLearnerPage() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   {a.submission_url && <a href={a.submission_url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline">View Work</a>}
                   {a.status === 'Submitted' && <button className="btn btn-sm btn-amber" onClick={() => { setEditing(a.id); setFeedbackText(a.feedback || ''); setScoreText(a.score?.toString() || ''); }}>Give Feedback</button>}
-                  {a.status === 'In Review' && <button className="btn btn-sm btn-primary" onClick={() => approveAssignment(a.id)}>Approve</button>}
+                  {a.status === 'Human Reviewed' && <button className="btn btn-sm btn-primary" onClick={() => approveAssignment(a.id)}>Approve</button>}
                 </div>
               </div>
 

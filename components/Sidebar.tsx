@@ -21,7 +21,10 @@ const AI_NAV = [
 ];
 
 const ADMIN_NAV = [
-  { href: '/admin', label: 'All Learners', icon: '👥', exact: true },
+  { href: '/admin', label: 'Dashboard', icon: '📊', exact: true },
+  { href: '/admin/reviews', label: 'Review Queue', icon: '📬' },
+  { href: '/admin/attendance', label: 'Attendance', icon: '📋' },
+  { href: '/admin/learners', label: 'All Learners', icon: '👥' },
   { href: '/admin/content', label: 'Manage Content', icon: '✏️' },
   { href: '/admin/cohort', label: 'Cohort Settings', icon: '⚙️' },
 ];
