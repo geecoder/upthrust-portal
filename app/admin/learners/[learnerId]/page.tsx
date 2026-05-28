@@ -141,7 +141,7 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
             {[
               ['Enrolment', typedLearner.enrollment_status],
               ['Cohort', typedLearner.cohort],
-              ['Current Role', typedLearner.current_role],
+              ['Current Role', typedLearner.current_job_role],
               ['Career Goal', typedLearner.career_goal],
               ['Onboarded', typedLearner.onboarding_complete ? 'Yes' : 'Not yet'],
               ['LinkedIn', typedLearner.linkedin_url],

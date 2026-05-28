@@ -32,7 +32,7 @@ export interface Learner {
   capstone_status: string;
   onboarding_complete?: boolean;
   career_goal?: string;
-  current_role?: string;
+  current_job_role?: string;
   linkedin_url?: string;
   cv_url?: string;
   bio?: string;

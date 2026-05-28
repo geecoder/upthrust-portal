@@ -18,7 +18,7 @@ export default function ProfilePage() {
     last_name: '',
     phone: '',
     country: '',
-    current_role: '',
+    current_job_role: '',
     career_goal: '',
     bio: '',
     linkedin_url: '',
@@ -44,7 +44,7 @@ export default function ProfilePage() {
           last_name: data.last_name || '',
           phone: data.phone || '',
           country: data.country || '',
-          current_role: data.current_role || '',
+          current_job_role: data.current_job_role || '',
           career_goal: data.career_goal || '',
           bio: data.bio || '',
           linkedin_url: data.linkedin_url || '',
@@ -66,7 +66,7 @@ export default function ProfilePage() {
       last_name: form.last_name,
       phone: form.phone,
       country: form.country,
-      current_role: form.current_role,
+      current_job_role: form.current_job_role,
       career_goal: form.career_goal,
       bio: form.bio,
       linkedin_url: form.linkedin_url,
@@ -162,7 +162,7 @@ export default function ProfilePage() {
           </div>
           <div className="form-group" style={{ marginBottom: 18 }}>
             <label className="form-label">Current Role or Background</label>
-            <input className="form-input" placeholder="e.g. Operations Analyst at Access Bank" value={form.current_role} onChange={e => setForm({ ...form, current_role: e.target.value })} />
+            <input className="form-input" placeholder="e.g. Operations Analyst at Access Bank" value={form.current_job_role} onChange={e => setForm({ ...form, current_job_role: e.target.value })} />
           </div>
           <div className="form-group" style={{ marginBottom: 18 }}>
             <label className="form-label">Short Bio</label>

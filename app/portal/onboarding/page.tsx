@@ -21,7 +21,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     career_goal: '',
-    current_role: '',
+    current_job_role: '',
     bio: '',
     linkedin_url: '',
     work_preference: 'Remote',
@@ -36,7 +36,7 @@ export default function OnboardingPage() {
       if (data) setForm(prev => ({
         ...prev,
         career_goal: data.career_goal || '',
-        current_role: data.current_role || '',
+        current_job_role: data.current_job_role || '',
         bio: data.bio || '',
         linkedin_url: data.linkedin_url || '',
         work_preference: data.work_preference || 'Remote',
@@ -126,7 +126,7 @@ export default function OnboardingPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Current role or background</label>
-                <input className="form-input" placeholder="e.g. Business Analyst at Zenith Bank" value={form.current_role} onChange={e => setForm({ ...form, current_role: e.target.value })} />
+                <input className="form-input" placeholder="e.g. Business Analyst at Zenith Bank" value={form.current_job_role} onChange={e => setForm({ ...form, current_job_role: e.target.value })} />
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Short bio (2–3 sentences)</label>

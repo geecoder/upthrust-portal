@@ -23,7 +23,7 @@ export default function AddLearnerPage() {
   const [form, setForm] = useState({
     first_name: '', last_name: '', email: '', phone: '',
     country: 'Nigeria', pathway: 'PM', tier: 'Standard',
-    current_role: '', career_goal: '', linkedin_url: '',
+    current_job_role: '', career_goal: '', linkedin_url: '',
   });
 
   function f(k: keyof typeof form, v: string) { setForm(prev => ({ ...prev, [k]: v })); }
@@ -58,7 +58,7 @@ export default function AddLearnerPage() {
       capstone_status: 'Not Started',
       onboarding_complete: false,
       passport_id: passportId,
-      current_role: form.current_role || null,
+      current_job_role: form.current_job_role || null,
       career_goal: form.career_goal || null,
       linkedin_url: form.linkedin_url || null,
     }).select().single();
@@ -167,7 +167,7 @@ export default function AddLearnerPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 4 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Current Role (optional)</label>
-            <input className="form-input" placeholder="Business Analyst, Operations Manager..." value={form.current_role} onChange={e => f('current_role', e.target.value)} />
+            <input className="form-input" placeholder="Business Analyst, Operations Manager..." value={form.current_job_role} onChange={e => f('current_job_role', e.target.value)} />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Career Goal (optional)</label>
