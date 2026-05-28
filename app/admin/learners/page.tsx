@@ -27,6 +27,7 @@ export default async function AllLearnersPage() {
           <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.75rem', fontWeight: 400 }}>All Learners — Cohort 1</h1>
           <p style={{ color: 'var(--ink-muted)', marginTop: 4 }}>{active.length} active · {pm} PM · {ba} BA</p>
         </div>
+        <Link href="/admin/learners/add" className="btn btn-primary">+ Add Learner</Link>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>

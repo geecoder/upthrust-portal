@@ -196,3 +196,24 @@ WHERE passport_id IS NULL;
 CREATE TRIGGER update_capability_scores_updated_at BEFORE UPDATE ON capability_scores
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+
+-- Community replies table
+CREATE TABLE IF NOT EXISTS community_replies (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  post_id UUID REFERENCES community_posts(id) ON DELETE CASCADE,
+  learner_id UUID REFERENCES learners(id) ON DELETE SET NULL,
+  author_name TEXT NOT NULL,
+  is_from_genesis BOOLEAN DEFAULT FALSE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE community_replies ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "community_replies_select_all" ON community_replies
+  FOR SELECT USING (TRUE);
+
+CREATE POLICY "community_replies_insert_own" ON community_replies
+  FOR INSERT WITH CHECK (
+    learner_id = (SELECT id FROM learners WHERE clerk_user_id = current_setting('request.jwt.claims', true)::json->>'sub')
+  );
