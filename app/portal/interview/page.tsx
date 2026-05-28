@@ -119,9 +119,8 @@ export default function InterviewPage() {
             {filtered.map(q => (
               <button key={q.id} onClick={() => selectQuestion(q)} style={{
                 display: 'block', width: '100%', textAlign: 'left',
-                padding: '12px 16px',
+                padding: '12px 16px', border: 'none', borderBottom: '1px solid var(--paper-line)',
                 background: selected?.id === q.id ? 'var(--paper-soft)' : 'transparent',
-                border: 'none', borderBottom: '1px solid var(--paper-line)',
                 cursor: 'pointer', transition: 'background 150ms',
                 borderLeft: selected?.id === q.id ? '3px solid var(--amber)' : '3px solid transparent',
               }}>

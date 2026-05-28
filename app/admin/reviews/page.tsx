@@ -55,20 +55,17 @@ export default function AdminReviewsPage() {
       portfolio_approved_at: status === 'Portfolio Ready' ? new Date().toISOString() : null,
     }).eq('id', selected.id);
 
-    // Create notification for learner
+    // Send email + create in-portal notification
     if (status !== 'Human Reviewed') {
-      const learner = getLearner(selected.learner_id);
-      if (learner) {
-        await db.from('notifications').insert({
-          learner_id: learner.id,
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           type: status === 'Resubmission Requested' ? 'resubmission_required' : 'feedback_ready',
-          title: status === 'Resubmission Requested' ? 'Resubmission Required' : 'Feedback Ready',
-          message: status === 'Resubmission Requested'
-            ? `Your Week ${selected.week_number} assignment needs revision. Check your feedback and resubmit.`
-            : `Genesis has reviewed your Week ${selected.week_number} assignment. ${score ? `Score: ${score}/100.` : ''} Log in to read your feedback.`,
-          related_assignment_id: selected.id,
-        }).then(null, () => {}); // non-blocking
-      }
+          learnerId: selected.learner_id,
+          assignmentId: selected.id,
+        }),
+      }).catch(console.error); // non-blocking — don't wait
     }
 
     await load();
@@ -145,10 +142,9 @@ export default function AdminReviewsPage() {
                 <button key={a.id} onClick={() => { setSelected(a); setFeedback(a.feedback || ''); setScore(a.score?.toString() || ''); setSaved(false); }}
                   style={{
                     display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px',
-                    cursor: 'pointer',
-                    background: isSelected ? 'var(--paper-soft)' : overdue ? 'rgba(220,38,38,0.03)' : 'transparent',
-                    border: 'none',
+                    cursor: 'pointer', border: 'none',
                     borderBottom: '1px solid var(--paper-line)',
+                    background: isSelected ? 'var(--paper-soft)' : overdue ? 'rgba(220,38,38,0.03)' : 'transparent',
                     borderLeft: isSelected ? '3px solid var(--ink)' : `3px solid ${overdue ? 'var(--red)' : 'transparent'}`,
                   }}
                 >
