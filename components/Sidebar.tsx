@@ -28,7 +28,8 @@ const ADMIN_NAV = [
   { href: '/admin/reviews', label: 'Review Queue', icon: '📬' },
   { href: '/admin/attendance', label: 'Attendance', icon: '📋' },
   { href: '/admin/learners', label: 'All Learners', icon: '👥' },
-  { href: '/admin/content', label: 'Manage Content', icon: '✏️' },
+  { href: '/admin/content', label: 'Week Content', icon: '✏️' },
+  { href: '/admin/resources', label: 'Resource Library', icon: '📚' },
   { href: '/admin/cohort', label: 'Cohort Settings', icon: '⚙️' },
 ];
 

@@ -9,7 +9,7 @@ ALTER TABLE learners
   ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS passport_id TEXT,
   ADD COLUMN IF NOT EXISTS career_goal TEXT,
-  ADD COLUMN IF NOT EXISTS current_role TEXT,
+  ADD COLUMN IF NOT EXISTS current_job_role TEXT,
   ADD COLUMN IF NOT EXISTS employer_visible BOOLEAN DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS preferred_roles TEXT,
   ADD COLUMN IF NOT EXISTS work_preference TEXT CHECK (work_preference IN ('Remote','Hybrid','Onsite','Flexible')),

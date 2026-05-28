@@ -6,7 +6,30 @@ export type PassportEligibility = 'Not Eligible' | 'Pending Review' | 'Approved'
 export type AssignmentStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'AI Reviewed' | 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Portfolio Ready';
 export type Phase = 'Foundation' | 'Core Skills' | 'Delivery' | 'Capstone';
 export type CapabilityLevel = 'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Portfolio Ready';
-export type ResourceType = 'Template' | 'Example' | 'Reading' | 'Tool' | 'Video' | 'Guide' | 'AI Prompt';
+export type ResourceType = 
+  | 'Template'
+  | 'Example' 
+  | 'Reading'
+  | 'Tool'
+  | 'Video'
+  | 'Guide'
+  | 'AI Prompt'
+  | 'Session Material'
+  | 'Recording'
+  | 'Slides'
+  | 'Worksheet'
+  | 'Case Study'
+  | 'Framework';
+
+export type ContentLevel = 
+  | 'Foundation'
+  | 'Intermediate'
+  | 'Core Skills'
+  | 'Delivery'
+  | 'Capstone'
+  | 'All Levels';
+
+export type ContentLinkType = 'url' | 'notion' | 'youtube' | 'file';
 
 export interface Learner {
   id: string;
@@ -130,6 +153,13 @@ export interface Resource {
   assignment_context?: string;
   external_url?: string;
   example_url?: string;
+  notion_url?: string;
+  youtube_url?: string;
+  file_url?: string;
+  link_type?: ContentLinkType;
+  content_level?: ContentLevel;
+  duration_minutes?: number;
+  author?: string;
   is_featured: boolean;
   is_active: boolean;
   tags?: string;
