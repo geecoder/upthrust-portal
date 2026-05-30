@@ -81,7 +81,7 @@ export default async function AdminDashboard() {
               <p style={{ fontSize: '0.8125rem', color: 'var(--ink-muted)', marginTop: 2 }}>{redLearners.map(l => `${l.first_name} ${l.last_name || ''}`).join(' · ')}</p>
             </div>
           </div>
-          <Link href="/admin" className="btn btn-danger btn-sm">View Learners</Link>
+          <Link href="/admin/learners" className="btn btn-danger btn-sm">View Learners</Link>
         </div>
       )}
 
@@ -101,11 +101,11 @@ export default async function AdminDashboard() {
 
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 24 }}>
-        <StatCard value={active.length} label="Active Learners" sub={`${typedLearners.length} total enrolled`} color="var(--ink)" href="/admin" />
+        <StatCard value={active.length} label="Active Learners" sub={`${typedLearners.length} total enrolled`} color="var(--ink)" href="/admin/learners" />
         <StatCard value={pending.length} label="Pending Reviews" sub="Need feedback" color="#2563EB" href="/admin/reviews" />
         <StatCard value={resubRequired.length} label="Resubmissions" sub="Waiting for update" color="var(--amber-deep)" href="/admin/reviews" />
         <StatCard value={`${submissionRate}%`} label="Submission Rate" sub={`${totalSubmissions} of ~${expectedSubmissions} expected`} color="var(--moss)" />
-        <StatCard value={portfolioReady.length} label="Portfolio Ready" sub="Artefacts approved" color="var(--amber)" href="/admin" />
+        <StatCard value={portfolioReady.length} label="Portfolio Ready" sub="Artefacts approved" color="var(--amber)" href="/admin/reviews" />
       </div>
 
       {/* Main grid */}
@@ -167,7 +167,7 @@ export default async function AdminDashboard() {
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.125rem', fontWeight: 500 }}>Learner Progress Overview</h2>
-              <Link href="/admin" className="btn btn-outline btn-sm">All Learners →</Link>
+              <Link href="/admin/learners" className="btn btn-outline btn-sm">All Learners →</Link>
             </div>
             <div className="table-wrapper" style={{ border: 'none' }}>
               <table>
@@ -292,7 +292,7 @@ export default async function AdminDashboard() {
                 { href: '/admin/attendance', label: '📋 Mark Attendance', sub: `Week ${currentWeek}` },
                 { href: '/admin/content', label: '✏️ Manage Week Content', sub: 'Publish next week' },
                 { href: '/admin/cohort', label: '📣 Post Announcement', sub: 'All learners' },
-                { href: '/admin', label: '👥 All Learners', sub: `${active.length} active` },
+                { href: '/admin/learners', label: '👥 All Learners', sub: `${active.length} active` },
               ].map(({ href, label, sub }) => (
                 <Link key={href} href={href} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--paper-soft)', borderRadius: 4, textDecoration: 'none' }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--ink)' }}>{label}</span>

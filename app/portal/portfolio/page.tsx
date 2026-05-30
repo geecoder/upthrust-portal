@@ -53,6 +53,8 @@ export default function PortfolioPage() {
   const [view, setView] = useState<'required' | 'all'>('required');
   const [form, setForm] = useState({ title: '', description: '', artefact_type: '', url: '', week_number: '' });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<PortfolioItem | null>(null);
 
   const db = createBrowserClient();
 
@@ -90,6 +92,35 @@ export default function PortfolioPage() {
     setSaving(false);
   }
 
+  async function handleDelete(itemId: string, itemTitle: string) {
+    if (!confirm(`Delete "${itemTitle}"? This cannot be undone.`)) return;
+    setDeleting(itemId);
+    await db.from('portfolio_items').delete().eq('id', itemId);
+    const { data: i } = await db.from('portfolio_items').select('*').eq('learner_id', learner.id).order('week_number');
+    setItems((i || []) as PortfolioItem[]);
+    setDeleting(null);
+  }
+
+  async function handleEdit(item: PortfolioItem) {
+    setEditingItem(item);
+    setForm({ title: item.title, description: item.description || '', artefact_type: item.artefact_type || '', url: item.url || '', week_number: item.week_number?.toString() || '' });
+    setAdding(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!learner || !editingItem || !form.title || !form.url) return;
+    setSaving(true);
+    await db.from('portfolio_items').update({
+      title: form.title, description: form.description,
+      artefact_type: form.artefact_type, url: form.url,
+      week_number: form.week_number ? parseInt(form.week_number) : null,
+    }).eq('id', editingItem.id);
+    const { data: i } = await db.from('portfolio_items').select('*').eq('learner_id', learner.id).order('week_number');
+    setItems((i || []) as PortfolioItem[]);
+    setForm({ title: '', description: '', artefact_type: '', url: '', week_number: '' });
+    setAdding(false); setEditingItem(null); setSaving(false);
+  }
+
   const pathway = learner?.pathway || 'PM';
   const requiredArtefacts = pathway === 'PM' ? REQUIRED_ARTEFACTS_PM : REQUIRED_ARTEFACTS_BA;
   const approvedItems = items.filter(i => i.status === 'Approved' || i.status === 'Featured');
@@ -107,7 +138,7 @@ export default function PortfolioPage() {
           <p style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>Evidence of Capability</p>
           <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.75rem', fontWeight: 400 }}>My Portfolio</h1>
         </div>
-        <button onClick={() => setAdding(true)} className="btn btn-primary">+ Add Artefact</button>
+        <button onClick={() => { setAdding(true); setEditingItem(null); setForm({ title: '', description: '', artefact_type: '', url: '', week_number: '' }); }} className="btn btn-primary">+ Add Artefact</button>
       </div>
 
       {/* Passport progress bar */}
@@ -209,7 +240,7 @@ export default function PortfolioPage() {
               <p style={{ fontSize: '3rem', marginBottom: 12 }}>💼</p>
               <p style={{ fontFamily: 'Fraunces, serif', fontSize: '1.25rem', marginBottom: 8 }}>Your portfolio is empty</p>
               <p style={{ color: 'var(--ink-muted)', marginBottom: 20 }}>Submit assignments to get them reviewed and approved. Approved assignments automatically become portfolio artefacts.</p>
-              <button onClick={() => setAdding(true)} className="btn btn-primary">+ Add Your First Artefact</button>
+              <button onClick={() => { setAdding(true); setEditingItem(null); setForm({ title: '', description: '', artefact_type: '', url: '', week_number: '' }); }} className="btn btn-primary">+ Add Your First Artefact</button>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
@@ -227,7 +258,13 @@ export default function PortfolioPage() {
                     <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '1rem', fontWeight: 500, marginBottom: 6 }}>{item.title}</h3>
                     {item.description && <p style={{ fontSize: '0.8125rem', color: 'var(--ink-muted)', lineHeight: 1.5, marginBottom: 10 }}>{item.description}</p>}
                     {item.feedback && <div style={{ padding: '8px 10px', background: 'var(--paper-soft)', borderRadius: 4, marginBottom: 10 }}><p style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontStyle: 'italic' }}>"{item.feedback}"</p></div>}
-                    {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">View Work →</a>}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">View →</a>}
+                      <button onClick={() => handleEdit(item)} className="btn btn-ghost btn-sm" title="Edit">✏️</button>
+                      <button onClick={() => handleDelete(item.id, item.title)} disabled={deleting === item.id} className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} title="Delete">
+                        {deleting === item.id ? '...' : '🗑'}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -240,7 +277,7 @@ export default function PortfolioPage() {
       {adding && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,26,46,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
           <div style={{ background: 'var(--white)', borderRadius: 8, width: '100%', maxWidth: 560, padding: 32, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.375rem', marginBottom: 20 }}>Add Portfolio Artefact</h2>
+            <h2 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.375rem', marginBottom: 20 }}>{editingItem ? 'Edit Artefact' : 'Add Portfolio Artefact'}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div className="form-group" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
                 <label className="form-label">Title *</label>
@@ -271,8 +308,8 @@ export default function PortfolioPage() {
               </div>
             </div>
             <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
-              <button onClick={handleAdd} disabled={!form.title || !form.url || saving} className="btn btn-primary">{saving ? 'Adding...' : 'Add to Portfolio'}</button>
-              <button onClick={() => setAdding(false)} className="btn btn-ghost">Cancel</button>
+              <button onClick={editingItem ? handleSaveEdit : handleAdd} disabled={!form.title || !form.url || saving} className="btn btn-primary">{saving ? 'Saving...' : editingItem ? 'Save Changes' : 'Add to Portfolio'}</button>
+              <button onClick={() => { setAdding(false); setEditingItem(null); }} className="btn btn-ghost">Cancel</button>
             </div>
           </div>
         </div>

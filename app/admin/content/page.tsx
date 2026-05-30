@@ -48,7 +48,17 @@ export default function ContentPage() {
   async function handleSave() {
     if (!editing) return;
     setSaving(true);
-    await db.from('weeks').update(editing).eq('id', editing.id);
+    const res = await fetch('/api/admin/save-week', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editing),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`Could not save: ${err.error || 'Unknown error'}`);
+      setSaving(false);
+      return;
+    }
     await load();
     setSaved(true);
     setSaving(false);
@@ -56,7 +66,16 @@ export default function ContentPage() {
   }
 
   async function togglePublish(week: Week) {
-    await db.from('weeks').update({ is_published: !week.is_published }).eq('id', week.id);
+    const res = await fetch('/api/admin/publish-week', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekId: week.id, isPublished: !week.is_published }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`Could not ${week.is_published ? 'unpublish' : 'publish'} week: ${err.error || 'Unknown error'}`);
+      return;
+    }
     await load();
   }
 
