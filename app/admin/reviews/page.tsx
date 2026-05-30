@@ -142,9 +142,10 @@ export default function AdminReviewsPage() {
                 <button key={a.id} onClick={() => { setSelected(a); setFeedback(a.feedback || ''); setScore(a.score?.toString() || ''); setSaved(false); }}
                   style={{
                     display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px',
-                    cursor: 'pointer', border: 'none',
-                    borderBottom: '1px solid var(--paper-line)',
+                    cursor: 'pointer',
                     background: isSelected ? 'var(--paper-soft)' : overdue ? 'rgba(220,38,38,0.03)' : 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid var(--paper-line)',
                     borderLeft: isSelected ? '3px solid var(--ink)' : `3px solid ${overdue ? 'var(--red)' : 'transparent'}`,
                   }}
                 >

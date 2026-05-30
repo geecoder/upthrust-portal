@@ -338,7 +338,7 @@ export default function AdminResourcesPage() {
 
               {/* Title + description */}
               <div>
-                <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '0.6875rem', fontWeight: 500, marginBottom: 14, color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <h3 style={{ fontFamily: 'Fraunces, serif', fontWeight: 500, marginBottom: 14, color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '0.6875rem' }}>
                   1 — BASIC DETAILS
                 </h3>
                 <div className="form-group" style={{ marginBottom: 14 }}>

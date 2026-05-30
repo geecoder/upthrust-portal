@@ -229,14 +229,16 @@ export async function POST(req: Request) {
   const result = await sendEmail(learner.email, subject, html);
 
   // Also create an in-portal notification record
-  await db.from('notifications').insert({
-    learner_id: learnerId,
-    type,
-    title: heading,
-    message: bodyHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 200),
-    related_assignment_id: assignmentId || null,
-    is_read: false,
-  }).then(() => {}, () => {});
+  try {
+    await db.from('notifications').insert({
+      learner_id: learnerId,
+      type,
+      title: heading,
+      message: bodyHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 200),
+      related_assignment_id: assignmentId || null,
+      is_read: false,
+    });
+  } catch {}
 
   return NextResponse.json({ ...result, learner: name });
 }
