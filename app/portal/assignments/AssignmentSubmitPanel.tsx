@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
 
 interface Props {
   learnerId: string;
@@ -27,15 +26,12 @@ export default function AssignmentSubmitPanel({
   existingAssignment,
 }: Props) {
   const router = useRouter();
-  const db = createBrowserClient();
-
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState(existingAssignment?.submission_url || '');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [generatingAI, setGeneratingAI] = useState(false);
+  const [phase, setPhase] = useState<'idle' | 'submitting' | 'ai' | 'done'>('idle');
   const [urlError, setUrlError] = useState('');
-  const [done, setDone] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState('');
 
   const isResubmission = existingAssignment?.status === 'Resubmission Requested';
   const hasSubmitted = !!existingAssignment?.submission_url;
@@ -46,75 +42,60 @@ export default function AssignmentSubmitPanel({
 
   async function handleSubmit() {
     setUrlError('');
-    if (!url.trim()) { setUrlError('Paste a link to your work first.'); return; }
+    if (!url.trim()) {
+      setUrlError('Paste a link to your work first.');
+      return;
+    }
     if (!validateUrl(url.trim())) {
       setUrlError("That doesn't look like a valid URL — make sure it starts with https://");
       return;
     }
 
-    setSubmitting(true);
-
-    const payload: Record<string, unknown> = {
-      learner_id: learnerId,
-      week_number: weekNumber,
-      pathway,
-      submission_url: url.trim(),
-      submission_notes: notes.trim() || null,
-      status: 'Submitted',
-      submitted_at: new Date().toISOString(),
-      resubmission_count: isResubmission
-        ? (existingAssignment?.resubmission_count ?? 0) + 1
-        : 0,
-    };
-
-    let assignmentId: string | null = null;
-
-    if (existingAssignment?.id) {
-      const { data } = await db
-        .from('assignments')
-        .update(payload)
-        .eq('id', existingAssignment.id)
-        .select('id')
-        .maybeSingle();
-      assignmentId = data?.id ?? existingAssignment.id;
-    } else {
-      const { data } = await db
-        .from('assignments')
-        .insert(payload)
-        .select('id')
-        .maybeSingle();
-      assignmentId = data?.id ?? null;
-    }
-
-    setSubmitting(false);
     setOpen(false);
-    setNotes('');
-    setDone(true);
+    setPhase('submitting');
 
-    // Trigger AI feedback — don't block UI
-    if (assignmentId) {
-      setGeneratingAI(true);
-      try {
-        await fetch('/api/ai-feedback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            assignmentId,
-            submissionUrl: url.trim(),
-            weekNumber,
-            pathway,
-            assignmentTitle,
-          }),
-        });
-      } catch (err) {
-        console.error('AI feedback error:', err);
-      } finally {
-        setGeneratingAI(false);
-        // Refresh the server component to show updated status + AI feedback
-        router.refresh();
+    try {
+      // Single API call handles: save assignment + generate AI feedback
+      const res = await fetch('/api/submit-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          weekNumber,
+          pathway,
+          submissionUrl: url.trim(),
+          submissionNotes: notes.trim() || null,
+          assignmentTitle,
+          assignmentBrief,
+        }),
+      });
+
+      setPhase('ai'); // Show "Generating AI feedback..."
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error('Submit error:', data);
+        setPhase('idle');
+        setOpen(true);
+        setUrlError(data.error || 'Submission failed. Please try again.');
+        return;
       }
-    } else {
+
+      if (data.aiFeedback) {
+        setAiFeedback(data.aiFeedback);
+      }
+
+      setPhase('done');
+      setNotes('');
+
+      // Refresh server component to show updated status
       router.refresh();
+
+    } catch (err) {
+      console.error('Submit error:', err);
+      setPhase('idle');
+      setOpen(true);
+      setUrlError('Network error. Please check your connection and try again.');
     }
   }
 
@@ -122,46 +103,54 @@ export default function AssignmentSubmitPanel({
     <div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-      {/* AI generating banner */}
-      {generatingAI && (
-        <div style={{
-          marginTop: 14, padding: '12px 16px',
-          background: 'rgba(124,58,237,0.06)',
-          border: '1px solid rgba(124,58,237,0.15)',
-          borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <div style={{
-            width: 14, height: 14, flexShrink: 0,
-            border: '2px solid rgba(124,58,237,0.2)',
-            borderTopColor: '#7C3AED',
-            borderRadius: '50%',
-            animation: 'spin 700ms linear infinite',
-          }} />
-          <p style={{ fontSize: '0.875rem', color: '#7C3AED', fontWeight: 600 }}>
-            Getting AI feedback — about 10 seconds...
-          </p>
+      {/* Submitting spinner */}
+      {phase === 'submitting' && (
+        <div style={{ marginTop: 14, padding: '14px 16px', background: 'rgba(15,26,46,0.04)', border: '1px solid var(--paper-line)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 16, height: 16, border: '2.5px solid var(--paper-line)', borderTopColor: 'var(--ink)', borderRadius: '50%', animation: 'spin 700ms linear infinite', flexShrink: 0 }} />
+          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--ink)' }}>Saving your submission...</p>
         </div>
       )}
 
-      {/* Submitted banner */}
-      {done && !generatingAI && (
-        <div style={{
-          marginTop: 12, padding: '10px 14px',
-          background: 'rgba(5,150,105,0.07)',
-          border: '1px solid rgba(5,150,105,0.2)',
-          borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span style={{ color: 'var(--moss)', fontWeight: 700 }}>✓</span>
-          <p style={{ fontSize: '0.875rem', color: 'var(--moss)', fontWeight: 600 }}>
-            Submitted. AI feedback loading, Genesis will review within 48 hours.
-          </p>
+      {/* AI generating */}
+      {phase === 'ai' && (
+        <div style={{ marginTop: 14, padding: '14px 16px', background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 16, height: 16, border: '2.5px solid rgba(124,58,237,0.2)', borderTopColor: '#7C3AED', borderRadius: '50%', animation: 'spin 700ms linear infinite', flexShrink: 0 }} />
+          <div>
+            <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#7C3AED' }}>⚡ Generating AI feedback...</p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', marginTop: 2 }}>This takes about 10 seconds</p>
+          </div>
         </div>
       )}
 
-      {/* Action button */}
-      {!open && !generatingAI && (
+      {/* Done — show inline AI feedback if received */}
+      {phase === 'done' && (
+        <div>
+          <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(5,150,105,0.07)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--moss)', fontWeight: 700, fontSize: '1rem' }}>✓</span>
+            <p style={{ fontSize: '0.875rem', color: 'var(--moss)', fontWeight: 600 }}>
+              Submitted successfully. Genesis will review within 48 hours.
+            </p>
+          </div>
+          {aiFeedback && (
+            <div style={{ marginTop: 10, padding: '14px 16px', background: 'rgba(124,58,237,0.04)', border: '1px solid rgba(124,58,237,0.12)', borderLeft: '3px solid #7C3AED', borderRadius: 6 }}>
+              <p style={{ fontSize: '0.5625rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7C3AED', marginBottom: 10 }}>
+                ⚡ AI First-Pass Feedback
+              </p>
+              <div style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                {aiFeedback}
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', marginTop: 10, fontStyle: 'italic' }}>
+                This is automated pre-screening. Genesis's human feedback is what determines your score.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action button — shown when idle */}
+      {phase === 'idle' && !open && (
         <button
-          onClick={() => { setOpen(true); setDone(false); setUrlError(''); }}
+          onClick={() => { setOpen(true); setUrlError(''); }}
           className="btn btn-primary btn-sm"
           style={{ marginTop: 10 }}
         >
@@ -172,25 +161,13 @@ export default function AssignmentSubmitPanel({
       )}
 
       {/* Submission form */}
-      {open && (
-        <div style={{
-          marginTop: 14, padding: '20px',
-          background: 'var(--paper-soft)',
-          border: '1px solid var(--paper-line)',
-          borderRadius: 6,
-        }}>
+      {phase === 'idle' && open && (
+        <div style={{ marginTop: 14, padding: '20px', background: 'var(--paper-soft)', border: '1px solid var(--paper-line)', borderRadius: 6 }}>
 
           {/* Brief */}
           {assignmentBrief && (
-            <div style={{
-              marginBottom: 16, padding: '12px 14px',
-              background: 'var(--white)', borderRadius: 4,
-              borderLeft: '3px solid var(--amber)',
-            }}>
-              <p style={{
-                fontSize: '0.5625rem', fontWeight: 800, letterSpacing: '0.14em',
-                textTransform: 'uppercase', color: 'var(--amber-deep)', marginBottom: 6,
-              }}>
+            <div style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--white)', borderRadius: 4, borderLeft: '3px solid var(--amber)' }}>
+              <p style={{ fontSize: '0.5625rem', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--amber-deep)', marginBottom: 6 }}>
                 Assignment Brief
               </p>
               <p style={{ fontSize: '0.875rem', color: 'var(--ink-soft)', lineHeight: 1.7 }}>
@@ -201,18 +178,14 @@ export default function AssignmentSubmitPanel({
 
           {/* Resubmission note */}
           {isResubmission && (
-            <div style={{
-              marginBottom: 14, padding: '10px 12px',
-              background: 'rgba(197,116,58,0.07)', borderRadius: 4,
-            }}>
+            <div style={{ marginBottom: 14, padding: '10px 12px', background: 'rgba(197,116,58,0.07)', borderRadius: 4 }}>
               <p style={{ fontSize: '0.8125rem', color: 'var(--amber-deep)', fontWeight: 600 }}>
-                Resubmission #{(existingAssignment?.resubmission_count ?? 0) + 1} — address all of
-                Genesis's feedback before resubmitting.
+                Resubmission #{(existingAssignment?.resubmission_count ?? 0) + 1} — address all of Genesis's feedback before resubmitting.
               </p>
             </div>
           )}
 
-          {/* URL */}
+          {/* URL field */}
           <div className="form-group">
             <label className="form-label">Your submission link *</label>
             <input
@@ -223,13 +196,8 @@ export default function AssignmentSubmitPanel({
               onChange={e => { setUrl(e.target.value); setUrlError(''); }}
               autoFocus
             />
-            <p style={{
-              fontSize: '0.75rem', marginTop: 5,
-              color: urlError ? 'var(--red)' : 'var(--ink-muted)',
-              fontWeight: urlError ? 600 : 400,
-            }}>
-              {urlError
-                || 'Paste a Google Doc, Notion, Figma, or Miro link. Set sharing to "Anyone with the link can view".'}
+            <p style={{ fontSize: '0.75rem', marginTop: 5, color: urlError ? 'var(--red)' : 'var(--ink-muted)', fontWeight: urlError ? 600 : 400 }}>
+              {urlError || 'Paste a Google Doc, Notion, Figma, or Miro link. Set sharing to "Anyone with the link can view".'}
             </p>
           </div>
 
@@ -242,7 +210,7 @@ export default function AssignmentSubmitPanel({
             <textarea
               className="form-input form-textarea"
               style={{ minHeight: 68 }}
-              placeholder="Anything specific you'd like Genesis to focus on..."
+              placeholder="Anything specific you'd like Genesis to focus on in their review..."
               value={notes}
               onChange={e => setNotes(e.target.value)}
             />
@@ -252,28 +220,17 @@ export default function AssignmentSubmitPanel({
           <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
             <button
               className="btn btn-primary"
-              disabled={!url.trim() || submitting}
+              disabled={!url.trim()}
               onClick={handleSubmit}
-              style={{ opacity: !url.trim() || submitting ? 0.6 : 1 }}
+              style={{ opacity: !url.trim() ? 0.6 : 1 }}
             >
-              {submitting
-                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{
-                      width: 12, height: 12, display: 'inline-block',
-                      border: '2px solid rgba(250,247,241,0.3)',
-                      borderTopColor: '#FAF7F1', borderRadius: '50%',
-                      animation: 'spin 600ms linear infinite',
-                    }} />
-                    Submitting...
-                  </span>
-                : isResubmission ? '↩ Submit Revision'
+              {isResubmission ? '↩ Submit Revision'
                 : hasSubmitted ? 'Update Submission'
                 : 'Submit Assignment →'}
             </button>
             <button
               className="btn btn-ghost"
               onClick={() => { setOpen(false); setUrlError(''); }}
-              disabled={submitting}
             >
               Cancel
             </button>
