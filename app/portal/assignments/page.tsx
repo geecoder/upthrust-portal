@@ -334,10 +334,7 @@ export default async function AssignmentsPage() {
                       submission_url: myAssign.submission_url,
                       resubmission_count: myAssign.resubmission_count,
                     } : null}
-                    onSubmitted={() => {
-                      // Server component can't refresh state directly —
-                      // panel handles optimistic UI; router.refresh() on the client
-                    }}
+
                   />
                 )}
 
