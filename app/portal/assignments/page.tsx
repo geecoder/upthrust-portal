@@ -274,7 +274,7 @@ export default function AssignmentsPage() {
 
                     {/* Assignment title — always show even if null */}
                     <p style={{ fontSize: '0.875rem', color: assignTitle ? 'var(--amber-deep)' : 'var(--ink-muted)', fontWeight: assignTitle ? 600 : 400, fontStyle: assignTitle ? 'normal' : 'italic' }}>
-                      {assignTitle || 'Assignment brief coming soon'}
+                      {assignTitle || '— Brief being finalised by Genesis'}
                     </p>
 
                     {/* Due date + deliverable */}
@@ -298,7 +298,7 @@ export default function AssignmentsPage() {
                         {myAssignment.score}/100
                       </span>
                     )}
-                    {canSubmit && assignTitle && (
+                    {canSubmit && (
                       <button
                         className="btn btn-sm btn-primary"
                         onClick={() => {
