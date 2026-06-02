@@ -61,7 +61,7 @@ export default function ProfilePage() {
   async function handleSave() {
     if (!learner) return;
     setSaving(true);
-    const { error } = await db.from('learners').update({
+    const fields = {
       first_name: form.first_name,
       last_name: form.last_name,
       phone: form.phone,
@@ -75,12 +75,19 @@ export default function ProfilePage() {
       availability: form.availability,
       preferred_roles: form.preferred_roles.join(','),
       employer_visible: form.employer_visible,
-    }).eq('id', learner.id);
-
+    };
+    const res = await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_profile', fields }),
+    });
+    const data = await res.json();
     setSaving(false);
-    if (!error) {
+    if (res.ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+    } else {
+      alert(data.error || 'Could not save changes. Please try again.');
     }
   }
 

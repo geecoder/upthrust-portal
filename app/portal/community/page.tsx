@@ -64,17 +64,15 @@ export default function CommunityPage() {
   }
 
   async function handlePost() {
-    if (!learner || !newPost.trim()) return;
+    if (!newPost.trim()) return;
     setPosting(true);
-    await db.from('community_posts').insert({
-      learner_id: learner.id,
-      author_name: `${learner.first_name} ${learner.last_name || ''}`.trim(),
-      category: newCategory,
-      content: newPost.trim(),
-      is_from_genesis: false,
-      likes_count: 0,
-      replies_count: 0,
+    const res = await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'community_post', post: { category: newCategory, content: newPost.trim() } }),
     });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Could not post. Please try again.'); setPosting(false); return; }
     const { data: p } = await db
       .from('community_posts')
       .select('*')
@@ -87,15 +85,13 @@ export default function CommunityPage() {
   }
 
   async function handleReply(postId: string) {
-    if (!learner || !replyText[postId]?.trim()) return;
-    await db.from('community_replies').insert({
-      post_id: postId,
-      learner_id: learner.id,
-      author_name: `${learner.first_name} ${learner.last_name || ''}`.trim(),
-      is_from_genesis: learner.id === process.env.NEXT_PUBLIC_ADMIN_LEARNER_ID,
-      content: replyText[postId].trim(),
+    if (!replyText[postId]?.trim()) return;
+    const res = await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'community_reply', postId, content: replyText[postId].trim() }),
     });
-    await db.from('community_posts').update({ replies_count: (posts.find(p => p.id === postId)?.replies_count || 0) + 1 }).eq('id', postId);
+    if (!res.ok) { const e = await res.json(); alert(e.error || 'Could not reply.'); return; }
 
     // Reload replies and posts
     const [{ data: newReplies }, { data: updatedPosts }] = await Promise.all([
@@ -108,9 +104,12 @@ export default function CommunityPage() {
   }
 
   async function handleLike(post: CommunityPost) {
-    if (!learner) return;
     const newCount = (post.likes_count || 0) + 1;
-    await db.from('community_posts').update({ likes_count: newCount }).eq('id', post.id);
+    await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'community_like', postId: post.id, newCount }),
+    });
     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, likes_count: newCount } : p));
   }
 
