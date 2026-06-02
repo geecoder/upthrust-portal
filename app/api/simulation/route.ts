@@ -357,8 +357,14 @@ export async function POST(req: Request) {
       })
     });
 
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[simulation/debrief] Anthropic error:', response.status, errText);
+      return NextResponse.json({ error: 'AI service error. Please try again.', detail: errText }, { status: 502 });
+    }
     const data = await response.json();
     const debrief = data.content?.[0]?.text || '';
+    if (!debrief) return NextResponse.json({ error: 'Empty AI response. Please try again.' }, { status: 502 });
     return NextResponse.json({ debrief });
   }
 
@@ -388,8 +394,14 @@ export async function POST(req: Request) {
     })
   });
 
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error('[simulation] Anthropic error:', response.status, errText);
+    return NextResponse.json({ error: 'AI service error. Please try again.', detail: errText }, { status: 502 });
+  }
   const data = await response.json();
   const reply = data.content?.[0]?.text || '';
+  if (!reply) return NextResponse.json({ error: 'Empty AI response. Please try again.' }, { status: 502 });
   const isComplete = reply.includes('[SIMULATION_COMPLETE]');
 
   return NextResponse.json({

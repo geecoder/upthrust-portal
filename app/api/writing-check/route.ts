@@ -76,6 +76,7 @@ Please review this text for writing quality and professional presentation.`;
     })
   });
 
+  if (!response.ok) { const e = await response.text(); console.error('[writing-check] Anthropic error:', response.status, e); return NextResponse.json({ error: 'AI service error. Please try again.' }, { status: 502 }); }
   const data = await response.json();
   const result = data.content?.[0]?.text || '';
 

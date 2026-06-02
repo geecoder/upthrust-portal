@@ -228,7 +228,8 @@ Please evaluate this answer now.`;
       })
     });
 
-    const data = await response.json();
+    if (!response.ok) { const e = await response.text(); console.error('[interview] Anthropic error:', response.status, e); return NextResponse.json({ error: 'AI service error. Please try again.' }, { status: 502 }); }
+  const data = await response.json();
     const evaluation = data.content?.[0]?.text || '';
     const modelAnswer = question.modelAnswer;
 
