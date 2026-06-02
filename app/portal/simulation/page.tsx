@@ -23,6 +23,7 @@ export default function SimulationPage() {
   const [selected, setSelected] = useState<Character | null>(null);
   const [phase, setPhase] = useState<'select' | 'brief' | 'sim' | 'debrief'>('select');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [debrief, setDebrief] = useState('');
@@ -50,13 +51,23 @@ export default function SimulationPage() {
     if (!selected) return;
     setPhase('sim');
     setLoading(true);
-    const res = await fetch('/api/simulation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: selected.id, messages: [], mode: 'simulate' })
-    });
-    const data = await res.json();
-    setMessages([{ role: 'assistant', content: data.reply }]);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: selected.id, messages: [], mode: 'simulate' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.reply) {
+        setErrorMsg(data.error || 'Could not start the simulation. Please try again.');
+        setLoading(false);
+        return;
+      }
+      setMessages([{ role: 'assistant', content: data.reply }]);
+    } catch {
+      setErrorMsg('Network error. Check your connection and try again.');
+    }
     setLoading(false);
     setTimeout(() => inputRef.current?.focus(), 100);
   }
@@ -70,17 +81,27 @@ export default function SimulationPage() {
     setTurnCount(t => t + 1);
     setLoading(true);
 
-    const res = await fetch('/api/simulation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: selected.id, messages: newMessages, mode: 'simulate' })
-    });
-    const data = await res.json();
-
-    if (data.isComplete || data.reply === '[SIMULATION_COMPLETE]') {
-      await getDebrief(newMessages);
-    } else {
-      setMessages([...newMessages, { role: 'assistant', content: data.reply }]);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: selected.id, messages: newMessages, mode: 'simulate' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.reply) {
+        setErrorMsg(data.error || 'The character did not respond. Please try again.');
+        setLoading(false);
+        return;
+      }
+      if (data.isComplete || data.reply === '[SIMULATION_COMPLETE]') {
+        await getDebrief(newMessages);
+      } else {
+        setMessages([...newMessages, { role: 'assistant', content: data.reply }]);
+        setLoading(false);
+      }
+    } catch {
+      setErrorMsg('Network error. Please try again.');
       setLoading(false);
     }
   }
@@ -88,13 +109,17 @@ export default function SimulationPage() {
   async function getDebrief(msgs: Message[]) {
     setPhase('debrief');
     setLoading(true);
-    const res = await fetch('/api/simulation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: selected!.id, messages: msgs, mode: 'debrief' })
-    });
-    const data = await res.json();
-    setDebrief(data.debrief || '');
+    try {
+      const res = await fetch('/api/simulation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: selected!.id, messages: msgs, mode: 'debrief' })
+      });
+      const data = await res.json();
+      setDebrief(data.debrief || data.error || 'Could not generate debrief. Your conversation is still saved.');
+    } catch {
+      setDebrief('Network error generating debrief. Please try again.');
+    }
     setLoading(false);
   }
 
@@ -298,6 +323,11 @@ export default function SimulationPage() {
 
       {/* Input */}
       <div style={{ padding: '16px 28px', background: 'var(--white)', borderTop: '1px solid var(--paper-line)', flexShrink: 0 }}>
+        {errorMsg && (
+          <div style={{ marginBottom: 10, padding: '8px 12px', background: 'rgba(179,56,44,0.08)', border: '1px solid rgba(179,56,44,0.25)', borderRadius: 6, color: 'var(--red)', fontSize: '0.8125rem', fontWeight: 600 }}>
+            ⚠ {errorMsg}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
           <textarea
             ref={inputRef}
