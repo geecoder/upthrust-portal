@@ -91,8 +91,9 @@ export default function AdminResourcesPage() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const { data } = await db.from('resources').select('*').order('created_at', { ascending: false });
-    setResources((data || []) as Resource[]);
+    const res = await fetch('/api/admin/data?resource=resources');
+    const data = await res.json();
+    setResources((data.resources || []) as Resource[]);
     setLoading(false);
   }
 
@@ -169,7 +170,8 @@ export default function AdminResourcesPage() {
     }
 
     setSaving(true);
-    const payload = {
+    const resource = {
+      id: editing?.id,
       title: form.title.trim(),
       description: form.description.trim() || null,
       resource_type: form.resource_type,
@@ -187,10 +189,16 @@ export default function AdminResourcesPage() {
       tags: form.tags.trim() || null,
     };
 
-    if (editing) {
-      await db.from('resources').update(payload).eq('id', editing.id);
-    } else {
-      await db.from('resources').insert(payload);
+    const res = await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'save_resource', resource }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || 'Could not save resource. Please try again.');
+      setSaving(false);
+      return;
     }
 
     await load();
@@ -203,18 +211,27 @@ export default function AdminResourcesPage() {
   }
 
   async function toggleActive(r: Resource) {
-    await db.from('resources').update({ is_active: !r.is_active }).eq('id', r.id);
+    await fetch('/api/admin/data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle_resource', resourceId: r.id, field: 'is_active', value: !r.is_active }),
+    });
     await load();
   }
 
   async function toggleFeatured(r: Resource) {
-    await db.from('resources').update({ is_featured: !r.is_featured }).eq('id', r.id);
+    await fetch('/api/admin/data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle_resource', resourceId: r.id, field: 'is_featured', value: !r.is_featured }),
+    });
     await load();
   }
 
   async function deleteResource(r: Resource) {
     if (!confirm(`Delete "${r.title}"? This cannot be undone.`)) return;
-    await db.from('resources').delete().eq('id', r.id);
+    await fetch('/api/admin/data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete_resource', resourceId: r.id }),
+    });
     await load();
   }
 

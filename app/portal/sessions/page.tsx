@@ -27,11 +27,18 @@ export default async function SessionsPage() {
   const db = createAdminClient();
   const currentWeek = getCurrentWeek();
 
-  const [{ data: weeks }, { data: learner }, { data: zoomConfig }] = await Promise.all([
+  const [{ data: weeks }, { data: learner }, { data: zoomConfig }, { data: scheduledSessions }] = await Promise.all([
     db.from('weeks').select('*').order('week_number'),
     db.from('learners').select('id, pathway, tier, attendance_pct').eq('clerk_user_id', userId!).maybeSingle(),
     db.from('weeks').select('zoom_link').eq('week_number', 0).maybeSingle(),
+    db.from('sessions').select('*').order('session_date', { ascending: true }),
   ]);
+
+  // Map zoom links from the sessions table by week number (overrides week zoom links)
+  const sessionsByWeek = new Map<number, any>();
+  (scheduledSessions || []).forEach((s: any) => {
+    if (s.week_number != null) sessionsByWeek.set(s.week_number, s);
+  });
 
   const { data: attendance } = learner
     ? await db.from('attendance').select('*').eq('learner_id', learner.id)
@@ -109,9 +116,11 @@ export default async function SessionsPage() {
           const assignTitle = pathway === 'PM' ? week.pm_assignment_title : week.ba_assignment_title;
           const dueDate = pathway === 'PM' ? week.pm_due_date : week.ba_due_date;
           // Only show recording if past AND recording URL exists
-          const showRecording = isPast && !!week.recording_url;
+          const scheduled = sessionsByWeek.get(week.week_number);
+          const showRecording = isPast && !!(scheduled?.recording_url || week.recording_url);
+          const recordingUrl = scheduled?.recording_url || week.recording_url;
           // Only show Join button if current week AND zoom link exists
-          const zoomLink = week.zoom_link || globalZoomLink;
+          const zoomLink = scheduled?.zoom_link || week.zoom_link || globalZoomLink;
 
           return (
             <div key={week.week_number} className="card" style={{
@@ -151,7 +160,7 @@ export default async function SessionsPage() {
                   )}
                   {/* Recording — only for past sessions with a recording URL */}
                   {showRecording && (
-                    <a href={week.recording_url!} target="_blank" rel="noopener noreferrer"
+                    <a href={recordingUrl!} target="_blank" rel="noopener noreferrer"
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.8125rem', color: '#2563EB', fontWeight: 600, marginTop: 8 }}>
                       🎬 Watch recording →
                     </a>
@@ -184,7 +193,7 @@ export default async function SessionsPage() {
                   <p style={{ fontSize: '0.8125rem', color: 'var(--red)', fontWeight: 600 }}>
                     You missed this session.{' '}
                     {showRecording
-                      ? <><a href={week.recording_url!} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--red)', textDecoration: 'underline' }}>Watch the recording</a> and email info@upthrustdigital.com to confirm.</>
+                      ? <><a href={recordingUrl!} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--red)', textDecoration: 'underline' }}>Watch the recording</a> and email info@upthrustdigital.com to confirm.</>
                       : 'The recording will appear here once available.'}
                   </p>
                 </div>

@@ -23,14 +23,13 @@ export default function AdminReviewsPage() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const [{ data: l }, { data: a }, { data: w }] = await Promise.all([
-      db.from('learners').select('*').order('first_name'),
-      db.from('assignments').select('*').order('submitted_at', { ascending: false }),
-      db.from('weeks').select('*').order('week_number'),
-    ]);
-    setLearners((l || []) as Learner[]);
-    setAssignments((a || []) as Assignment[]);
-    setWeeks((w || []) as Week[]);
+    const res = await fetch('/api/admin/data?resource=review_queue');
+    const data = await res.json();
+    if (res.ok) {
+      setLearners((data.learners || []) as Learner[]);
+      setAssignments((data.assignments || []) as Assignment[]);
+      setWeeks((data.weeks || []) as Week[]);
+    }
   }
 
   function getLearner(id: string) { return learners.find(l => l.id === id); }
@@ -45,17 +44,20 @@ export default function AdminReviewsPage() {
   async function submitFeedback(status: 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Portfolio Ready') {
     if (!selected) return;
     setSaving(true);
-    await db.from('assignments').update({
-      feedback,
-      score: score ? parseFloat(score) : null,
-      feedback_by: 'Genesis',
-      feedback_at: new Date().toISOString(),
-      status,
-      portfolio_approved: status === 'Portfolio Ready',
-      portfolio_approved_at: status === 'Portfolio Ready' ? new Date().toISOString() : null,
-    }).eq('id', selected.id);
+    const res = await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'review_feedback',
+        assignmentId: selected.id,
+        status,
+        score: score ? parseFloat(score) : null,
+        feedback,
+      }),
+    });
+    if (!res.ok) { const e = await res.json(); alert(e.error || 'Could not save feedback.'); setSaving(false); return; }
 
-    // Send email + create in-portal notification
+    // Send email (non-blocking) — in-portal notification already created by the API
     if (status !== 'Human Reviewed') {
       fetch('/api/notify', {
         method: 'POST',
@@ -65,7 +67,7 @@ export default function AdminReviewsPage() {
           learnerId: selected.learner_id,
           assignmentId: selected.id,
         }),
-      }).catch(console.error); // non-blocking — don't wait
+      }).catch(console.error);
     }
 
     await load();

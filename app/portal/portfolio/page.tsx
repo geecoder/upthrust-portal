@@ -77,14 +77,9 @@ export default function PortfolioPage() {
   async function handleAdd() {
     if (!learner || !form.title || !form.url) return;
     setSaving(true);
-    await db.from('portfolio_items').insert({
-      learner_id: learner.id,
-      title: form.title, description: form.description,
-      artefact_type: form.artefact_type,
-      url: form.url,
-      week_number: form.week_number ? parseInt(form.week_number) : null,
-      status: 'Draft',
-    });
+    const _res = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'portfolio_add', item: { title: form.title, description: form.description, artefact_type: form.artefact_type, url: form.url, week_number: form.week_number } }) });
+    const _d = await _res.json();
+    if (!_res.ok) { alert(_d.error || 'Could not add artefact.'); setSaving(false); return; }
     const { data: i } = await db.from('portfolio_items').select('*').eq('learner_id', learner.id).order('week_number');
     setItems((i || []) as PortfolioItem[]);
     setForm({ title: '', description: '', artefact_type: '', url: '', week_number: '' });
@@ -95,7 +90,8 @@ export default function PortfolioPage() {
   async function handleDelete(itemId: string, itemTitle: string) {
     if (!confirm(`Delete "${itemTitle}"? This cannot be undone.`)) return;
     setDeleting(itemId);
-    await db.from('portfolio_items').delete().eq('id', itemId);
+    const _r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'portfolio_delete', itemId }) });
+    if (!_r.ok) { const _e = await _r.json(); alert(_e.error || 'Could not delete.'); setDeleting(null); return; }
     const { data: i } = await db.from('portfolio_items').select('*').eq('learner_id', learner.id).order('week_number');
     setItems((i || []) as PortfolioItem[]);
     setDeleting(null);
@@ -110,11 +106,8 @@ export default function PortfolioPage() {
   async function handleSaveEdit() {
     if (!learner || !editingItem || !form.title || !form.url) return;
     setSaving(true);
-    await db.from('portfolio_items').update({
-      title: form.title, description: form.description,
-      artefact_type: form.artefact_type, url: form.url,
-      week_number: form.week_number ? parseInt(form.week_number) : null,
-    }).eq('id', editingItem.id);
+    const _re = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'portfolio_edit', itemId: editingItem.id, item: { title: form.title, description: form.description, artefact_type: form.artefact_type, url: form.url, week_number: form.week_number } }) });
+    if (!_re.ok) { const _ee = await _re.json(); alert(_ee.error || 'Could not save.'); setSaving(false); return; }
     const { data: i } = await db.from('portfolio_items').select('*').eq('learner_id', learner.id).order('week_number');
     setItems((i || []) as PortfolioItem[]);
     setForm({ title: '', description: '', artefact_type: '', url: '', week_number: '' });
@@ -188,9 +181,9 @@ export default function PortfolioPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {requiredArtefacts.map(req => {
             const match = getItemForWeek(req.week);
-            const status = match ? match.status : 'Not Started';
+            const status: string = match ? (match as any).status : 'Not Started';
             const isApproved = status === 'Approved' || status === 'Portfolio Ready' || status === 'Featured';
-            const url = match ? ((match as PortfolioItem).url ?? (match as Assignment).submission_url ?? null) : null;
+            const url = match ? ((match as any).url || (match as any).submission_url || null) : null;
 
             return (
               <div key={req.week} className="card" style={{

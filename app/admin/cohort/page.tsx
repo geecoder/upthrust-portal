@@ -26,16 +26,33 @@ export default function CohortCommunicationsPage() {
 
   // Custom email form
   const [customEmail, setCustomEmail] = useState({ subject: '', content: '', targetLearners: 'all' as 'all' | 'pm' | 'ba' | string[] });
+  const [extraEmails, setExtraEmails] = useState('');
+
+  // Past announcements (activity log)
+  const [pastAnnouncements, setPastAnnouncements] = useState<any[]>([]);
 
   const db = createBrowserClient();
 
-  useEffect(() => {
-    db.from('learners').select('*').eq('enrollment_status', 'Active').order('first_name')
-      .then(({ data }) => setLearners((data || []) as Learner[]));
-  }, []);
+  async function loadData() {
+    // Load active learners through the admin API (bypasses RLS)
+    const [lRes, aRes] = await Promise.all([
+      fetch('/api/admin/data?resource=active_learners'),
+      fetch('/api/admin/data?resource=announcements'),
+    ]);
+    const lData = await lRes.json();
+    const aData = await aRes.json();
+    if (lRes.ok) setLearners((lData.learners || []) as Learner[]);
+    if (aRes.ok) setPastAnnouncements(aData.announcements || []);
+  }
+
+  useEffect(() => { loadData(); }, []);
 
   function toggleInactivityTarget(id: string) {
     setInactivityTargets(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  function parseExtraEmails(): string[] {
+    return extraEmails.split(/[,;\n]/).map(e => e.trim()).filter(e => e.includes('@'));
   }
 
   async function postAnnouncement() {
@@ -43,21 +60,23 @@ export default function CohortCommunicationsPage() {
     setSending(true);
     setResult(null);
 
-    // Save to DB
-    await db.from('announcements').insert({
-      title: announcement.title,
-      content: announcement.content,
-      priority: announcement.priority,
-      target_pathway: announcement.target,
-      is_published: true,
+    // Save announcement + create in-portal notifications via admin API
+    const res = await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'post_announcement',
+        title: announcement.title,
+        content: announcement.content,
+        priority: announcement.priority,
+        target: announcement.target,
+      }),
     });
+    const data = await res.json();
+    if (!res.ok) { setResult({ error: data.error || 'Could not post announcement.' }); setSending(false); return; }
 
-    // Email all active learners
-    const targets = learners.filter(l =>
-      announcement.target === 'All' ||
-      l.pathway === announcement.target
-    );
-
+    // Email targeted learners (non-blocking best-effort)
+    const targets = learners.filter(l => announcement.target === 'All' || l.pathway === announcement.target);
     let sent = 0;
     for (const l of targets) {
       await fetch('/api/notify', {
@@ -71,14 +90,16 @@ export default function CohortCommunicationsPage() {
       }).then(r => r.ok && sent++).catch(() => {});
     }
 
-    setResult({ success: `Announcement posted. ${sent}/${targets.length} learners notified.` });
+    setResult({ success: `Announcement posted. ${data.notified} learner${data.notified !== 1 ? 's' : ''} notified in-portal, ${sent} emailed.` });
     setAnnouncement({ title: '', content: '', priority: 'Normal', target: 'All' });
+    await loadData();
     setSending(false);
   }
 
   async function sendSessionReminder() {
     setSending(true);
     setResult(null);
+    if (learners.length === 0) { setResult({ error: 'No active learners found.' }); setSending(false); return; }
     let sent = 0;
     for (const l of learners) {
       await fetch('/api/notify', {
@@ -87,14 +108,38 @@ export default function CohortCommunicationsPage() {
         body: JSON.stringify({ type: 'session_reminder', learnerId: l.id, weekNumber: reminderWeek }),
       }).then(r => r.ok && sent++).catch(() => {});
     }
+    // Also create in-portal notifications
+    await fetch('/api/admin/data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create_notifications',
+        learnerIds: learners.map(l => l.id),
+        type: 'session_reminder',
+        title: `📅 Session reminder — Week ${reminderWeek}`,
+        message: `Your Week ${reminderWeek} live session is coming up. See you there!`,
+      }),
+    }).catch(() => {});
     setResult({ success: `Session reminder sent to ${sent}/${learners.length} learners.` });
     setSending(false);
   }
 
   async function sendInactivityNudges() {
     if (inactivityTargets.length === 0) { setResult({ error: 'Select at least one learner to nudge.' }); return; }
+    if (!inactivityMessage.trim()) { setResult({ error: 'Write a nudge message first.' }); return; }
     setSending(true);
     setResult(null);
+    // In-portal notifications via admin API
+    await fetch('/api/admin/data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create_notifications',
+        learnerIds: inactivityTargets,
+        type: 'inactivity_nudge',
+        title: '👋 A nudge from Genesis',
+        message: inactivityMessage,
+      }),
+    }).catch(() => {});
+    // Email best-effort
     let sent = 0;
     for (const id of inactivityTargets) {
       await fetch('/api/notify', {
@@ -103,8 +148,9 @@ export default function CohortCommunicationsPage() {
         body: JSON.stringify({ type: 'inactivity_nudge', learnerId: id, customMessage: inactivityMessage }),
       }).then(r => r.ok && sent++).catch(() => {});
     }
-    setResult({ success: `Nudge sent to ${sent} learner${sent !== 1 ? 's' : ''}.` });
+    setResult({ success: `Nudge sent to ${inactivityTargets.length} learner${inactivityTargets.length !== 1 ? 's' : ''}.` });
     setInactivityTargets([]);
+    setInactivityMessage('');
     setSending(false);
   }
 
@@ -128,8 +174,24 @@ export default function CohortCommunicationsPage() {
         }),
       }).then(r => r.ok && sent++).catch(() => {});
     }
-    setResult({ success: `Email sent to ${sent}/${targets.length} learners.` });
+
+    // Additional manual email addresses
+    const extras = parseExtraEmails();
+    for (const email of extras) {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'announcement',
+          directEmail: email,
+          customMessage: { title: customEmail.subject, content: customEmail.content, subject: customEmail.subject },
+        }),
+      }).then(r => r.ok && sent++).catch(() => {});
+    }
+
+    setResult({ success: `Email sent to ${sent} recipient${sent !== 1 ? 's' : ''} (${targets.length} learners${extras.length ? ` + ${extras.length} extra` : ''}).` });
     setCustomEmail({ subject: '', content: '', targetLearners: 'all' });
+    setExtraEmails('');
     setSending(false);
   }
 
@@ -205,6 +267,31 @@ export default function CohortCommunicationsPage() {
           <button onClick={postAnnouncement} disabled={sending || !announcement.title || !announcement.content} className="btn btn-primary">
             {sending ? 'Sending...' : `📣 Post & Email ${announcement.target === 'All' ? 'All' : announcement.target} Learners`}
           </button>
+
+          {/* Activity log — past announcements */}
+          {pastAnnouncements.length > 0 && (
+            <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--paper-line)' }}>
+              <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 14 }}>
+                Recent announcements ({pastAnnouncements.length})
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {pastAnnouncements.slice(0, 10).map((a: any) => (
+                  <div key={a.id} style={{ padding: '12px 16px', background: 'var(--paper-soft)', borderRadius: 6, borderLeft: '3px solid var(--amber)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                      <p style={{ fontWeight: 600, fontSize: '0.875rem' }}>{a.title}</p>
+                      <span style={{ fontSize: '0.6875rem', color: 'var(--ink-muted)' }}>
+                        {a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                        {a.target_pathway && a.target_pathway !== 'All' ? ` · ${a.target_pathway}` : ' · All'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--ink-muted)', lineHeight: 1.5 }}>
+                      {a.content?.length > 140 ? a.content.substring(0, 140) + '…' : a.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -130,10 +130,21 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { type, learnerId, assignmentId, weekNumber, pathway, score, customMessage } = body;
+  const { type, learnerId, assignmentId, weekNumber, pathway, score, customMessage, directEmail } = body;
 
   const db = createAdminClient();
   const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://upthrust-portal-qj18.vercel.app';
+
+  // Direct email path — send to an arbitrary address (admin custom emails)
+  if (directEmail && customMessage) {
+    const html = emailTemplate(
+      'there',
+      customMessage.title || customMessage.subject || 'A message from Upthrust',
+      typeof customMessage === 'string' ? customMessage : (customMessage.content || ''),
+    );
+    const r = await sendEmail(directEmail, customMessage.subject || 'A message from Upthrust', html);
+    return NextResponse.json({ ok: r.sent, direct: true });
+  }
 
   const { data: learner } = await db
     .from('learners')
