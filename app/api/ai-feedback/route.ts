@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic';
+﻿export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
@@ -24,7 +24,7 @@ Give feedback in this exact structure:
 **One priority action before resubmitting:**
 [One specific thing to do]
 
-Keep your tone professional but encouraging. Be specific — reference the actual work, not generic advice.
+Keep your tone professional but encouraging. Be specific â€” reference the actual work, not generic advice.
 Maximum 250 words.`,
 
   'Problem Brief': `You are a senior product leader reviewing a learner's problem brief.
@@ -32,7 +32,7 @@ Evaluate against these criteria:
 1. User specificity (is the user defined precisely, not broadly as "users"?)
 2. Problem framing (is it a problem statement, not a solution statement?)
 3. Business relevance (is there a clear business reason to solve this?)
-4. Scope clarity (are boundaries clear — what's in and out?)
+4. Scope clarity (are boundaries clear â€” what's in and out?)
 5. Current workaround identification (do they name how people cope today?)
 
 Give feedback in this exact structure:
@@ -91,11 +91,11 @@ Maximum 250 words.`,
 The learner is studying Product Management or Business Analysis.
 
 Evaluate the submission against these general criteria:
-1. Completeness — does it cover all required elements?
-2. Clarity — is the thinking clear and well-structured?
-3. Specificity — is it specific (not generic or vague)?
-4. Professional quality — would this hold up in a real work environment?
-5. Evidence of reasoning — do they explain their decisions?
+1. Completeness â€” does it cover all required elements?
+2. Clarity â€” is the thinking clear and well-structured?
+3. Specificity â€” is it specific (not generic or vague)?
+4. Professional quality â€” would this hold up in a real work environment?
+5. Evidence of reasoning â€” do they explain their decisions?
 
 Give feedback in this exact structure:
 **What you did well:**
@@ -145,7 +145,7 @@ Provide constructive, specific feedback that will help this learner improve thei
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 600,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
