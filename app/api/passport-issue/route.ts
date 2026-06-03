@@ -82,6 +82,20 @@ export async function POST(req: NextRequest) {
     }, { status: 409 });
   }
 
+  // 2b) Hard data-quality gate — no override bypasses this, not even 'Approved'.
+  //     A passport with 0 score or no graded work is meaningless as a credential.
+  const { count: gradedCount } = await db
+    .from('assignments')
+    .select('id', { count: 'exact', head: true })
+    .eq('learner_id', learnerId)
+    .not('score', 'is', null);
+
+  if (overallScore <= 0 || (gradedCount ?? 0) === 0) {
+    return NextResponse.json({
+      error: 'Cannot issue: learner has no graded scores yet. Grade assignments first.',
+    }, { status: 409 });
+  }
+
   // 3) Pull per-domain capability scores (snapshot).
   //    Table columns: learner_id, domain, score, capability, level.
   //    We select domain + score only; level is recomputed from score so it
