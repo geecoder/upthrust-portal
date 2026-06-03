@@ -7,7 +7,7 @@ import type { Learner, Assignment } from '@/lib/types';
 import { PASSPORT_CRITERIA } from '@/lib/types';
 import { qrSvg } from '@/lib/qr';
 import { signPassport, verifyUrl } from '@/lib/passport';
-import { UPTHRUST_LOGO_DATA_URL, UPTHRUST_WATERMARK_DATA_URL } from '@/lib/upthrust-logo-base64';
+import { UPTHRUST_LOGO_LIGHT_DATA_URL, UPTHRUST_WATERMARK_DATA_URL, GENESIS_SIGNATURE_DATA_URL } from '@/lib/upthrust-logo-base64';
 
 // Generate the HTML for the passport (rendered to PDF via browser print)
 function generatePassportHTML(
@@ -371,7 +371,7 @@ function generatePassportHTML(
   <!-- Header -->
   <div class="header">
     <div class="header-logo">
-      <img src="${UPTHRUST_LOGO_DATA_URL}" alt="Upthrust" style="height:46px;width:auto;display:block;border:none;background:none;" />
+      <img src="${UPTHRUST_LOGO_LIGHT_DATA_URL}" alt="Upthrust" style="height:46px;width:auto;display:block;border:none;background:none;" />
     </div>
     <div class="header-meta">
       <span class="doc-type">Capability Passport</span>
@@ -442,6 +442,8 @@ function generatePassportHTML(
       &#8220;${noteText}&#8221;
     </div>
     <div class="capstone-meta">
+      <img src="${GENESIS_SIGNATURE_DATA_URL}" alt="Signature" style="height:52px;width:auto;display:block;border:none;background:none;margin-bottom:6px;" />
+      <div style="width:160px;height:1px;background:#C5743A;margin-bottom:6px;"></div>
       Genesis Nneji Enwenyeokwu, MBA, CBAP &#8212; Founder &amp; Lead Facilitator, Upthrust Career Capability Accelerator
     </div>
   </div>
@@ -464,12 +466,12 @@ function generatePassportHTML(
       ${verifyHref ? `
       <div style="flex-shrink:0;">
         <div style="display:flex;align-items:flex-start;gap:10px;">
-          <div style="width:120px;height:120px;border:2px solid #C99A3C;border-radius:8px;padding:6px;background:#fff;flex-shrink:0;overflow:hidden;">
+          <div style="width:120px;border:2px solid #C99A3C;border-radius:8px;padding:6px;background:#fff;flex-shrink:0;">
             ${qrMarkup}
           </div>
-          <div style="width:140px;">
-            <div style="font-size:8px;font-weight:700;letter-spacing:1px;color:#9AA1AC;text-transform:uppercase;margin-bottom:4px;">Scan to verify</div>
-            <div style="font-size:11px;color:#A87E28;font-weight:600;word-break:break-all;line-height:1.45;">${verifyHref.replace(/^https?:\/\//, '')}</div>
+          <div style="width:130px;">
+            <div style="font-size:10px;font-weight:700;color:#4A5468;line-height:1.45;margin-bottom:5px;">Scan to verify this credential</div>
+            <div style="font-size:10px;color:#A05A26;font-weight:600;">upthrustdigital.com/verify</div>
           </div>
         </div>
       </div>` : ''}
