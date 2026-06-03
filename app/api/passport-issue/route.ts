@@ -97,19 +97,19 @@ export async function POST(req: NextRequest) {
   }
 
   // 3) Pull per-domain capability scores (snapshot).
-  //    Table columns: learner_id, domain, score, capability, level.
-  //    We select domain + score only; level is recomputed from score so it
+  //    Real columns: learner_id, capability (text), score (numeric), level (text).
+  //    We select capability + score; level is recomputed from score so it
   //    always matches the snapshotted number.
   const pathway: string = learner.pathway || learner.track || 'Product Management';
   const domains = domainsFor(pathway);
 
   const { data: capRows } = await db
     .from('capability_scores')
-    .select('domain, score')
+    .select('capability, score')
     .eq('learner_id', learnerId);
 
   const capMap = new Map<string, number>();
-  (capRows || []).forEach((r: any) => capMap.set(String(r.domain), Number(r.score)));
+  (capRows || []).forEach((r: any) => capMap.set(String(r.capability), Number(r.score)));
 
   const capabilityBreakdown = domains.map((d) => {
     const score = capMap.has(d) ? capMap.get(d)! : overallScore; // fallback to overall
