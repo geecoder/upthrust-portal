@@ -7,6 +7,7 @@ import type { Learner, Assignment, Attendance, CapabilityScore } from '@/lib/typ
 import { RISK_COLOR, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG } from '@/lib/types';
 import Link from 'next/link';
 import ClerkLinkForm from './ClerkLinkForm';
+import PassportControls from '@/components/PassportControls';
 
 export default async function LearnerDetailPage({ params }: { params: Promise<{ learnerId: string }> }) {
   const { userId } = await auth();
@@ -193,22 +194,11 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
           )}
 
           {/* Passport */}
-          <div className="card">
-            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '1rem', fontWeight: 500, marginBottom: 12 }}>Passport Status</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: 8 }}>
-              <span style={{ color: 'var(--ink-muted)' }}>Eligibility</span>
-              <span style={{ fontWeight: 600, color: typedLearner.passport_eligibility === 'Approved' ? 'var(--moss)' : 'var(--ink-muted)' }}>{typedLearner.passport_eligibility || 'Not Eligible'}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-              <span style={{ color: 'var(--ink-muted)' }}>Issued</span>
-              <span style={{ fontWeight: 600, color: typedLearner.passport_issued ? 'var(--moss)' : 'var(--ink-muted)' }}>{typedLearner.passport_issued ? 'Yes' : 'No'}</span>
-            </div>
-            {typedLearner.passport_issued && (
-              <a href={`/api/passport-pdf?learnerId=${typedLearner.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm" style={{ marginTop: 12, display: 'block', textAlign: 'center' }}>
-                Preview Passport PDF
-              </a>
-            )}
-          </div>
+          <PassportControls
+            learnerId={typedLearner.id}
+            passportId={typedLearner.passport_id}
+            passportIssued={typedLearner.passport_issued}
+          />
         </div>
       </div>
     </div>

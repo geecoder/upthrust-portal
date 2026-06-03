@@ -5,12 +5,16 @@ import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 import type { Learner, Assignment } from '@/lib/types';
 import { PASSPORT_CRITERIA } from '@/lib/types';
+import { qrSvg } from '@/lib/qr';
+import { signPassport, verifyUrl } from '@/lib/passport';
 
 // Generate the HTML for the passport (rendered to PDF via browser print)
 function generatePassportHTML(
   learner: Learner,
   assignments: Assignment[],
-  capstoneNote: string
+  capstoneNote: string,
+  verifyHref: string,
+  qrMarkup: string,
 ): string {
   const approvedCount = assignments.filter(a =>
     a.status === 'Approved' || a.status === 'Portfolio Ready'
@@ -474,11 +478,18 @@ function generatePassportHTML(
     <div class="footer-left">
       <div class="issued-label">Date Issued</div>
       <div class="issued-date">${issuedDate}</div>
-      <div class="verify-url">Verify at: upthrustdigital.com/verify/${learner.passport_id || 'UP-C1-XXXX'}</div>
+      ${verifyHref ? `<div style="display:flex;align-items:center;gap:14px;margin-top:10px;">
+        <div style="width:104px;height:104px;border:2px solid #C99A3C;border-radius:8px;padding:4px;background:#fff;flex-shrink:0;">
+          ${qrMarkup}
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1.2px;color:#9AA1AC;text-transform:uppercase;">Verify this credential</div>
+          <div style="font-size:12px;color:#A87E28;font-weight:600;margin-top:4px;word-break:break-all;">${verifyHref.replace(/^https?:\/\//, '')}</div>
+          <div style="font-size:10px;color:#9AA1AC;margin-top:6px;">Scan to confirm authenticity at upthrustdigital.com</div>
+        </div>
+      </div>` : ''}
     </div>
-    <div class="qr-placeholder">
-      <span>QR<br/>CODE</span>
-    </div>
+    ${qrMarkup ? `<div style="width:104px;height:104px;border:2px solid #C99A3C;border-radius:8px;padding:4px;background:#fff;flex-shrink:0;">${qrMarkup}</div>` : ''}
   </div>
 
   <div class="corner-accent"></div>
@@ -523,7 +534,28 @@ export async function GET(req: Request) {
     .select('*')
     .eq('learner_id', learner.id);
 
-  const html = generatePassportHTML(learner, (assignments || []) as Assignment[], '');
+  // Load the issued passport snapshot so the signed fields match exactly what
+  // was signed at issuance — critical for HMAC verification consistency.
+  const { data: pp } = await db
+    .from('passports')
+    .select('*')
+    .eq('learner_id', learner.id)
+    .eq('status', 'issued')
+    .maybeSingle();
+
+  const signable = {
+    passport_id: pp?.passport_id ?? learner.passport_id,
+    learner_id: learner.id,
+    pathway: pp?.pathway ?? learner.pathway,
+    cohort: pp?.cohort ?? learner.cohort,
+    overall_score: Number(pp?.overall_score ?? learner.avg_score),
+    issued_at: String(pp?.issued_at ?? learner.passport_issued_at ?? new Date().toISOString()).slice(0, 10),
+  };
+  const sig = pp?.signature ?? signPassport(signable);
+  const verifyHref = verifyUrl(signable.passport_id, sig);
+  const qrMarkup = pp ? qrSvg(verifyHref, { module: 4, quiet: 4, dark: '#0B1F3A' }) : '';
+
+  const html = generatePassportHTML(learner, (assignments || []) as Assignment[], '', verifyHref, qrMarkup);
 
   return new Response(html, {
     headers: {
