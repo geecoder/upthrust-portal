@@ -132,9 +132,11 @@ export async function POST(req: NextRequest) {
     .eq('cohort', cohort);
   const sequence = (count || 0) + 1;
 
-  const passportId =
-    learner.passport_id ||
-    buildPassportId({ pathway, cohortNumber, year, sequence });
+  const hasCanonical = typeof learner.passport_id === 'string'
+    && learner.passport_id.startsWith('UPT-');
+  const passportId = hasCanonical
+    ? learner.passport_id
+    : buildPassportId({ pathway, cohortNumber, year, sequence });
 
   const signable: SignablePassport = {
     passport_id: passportId,

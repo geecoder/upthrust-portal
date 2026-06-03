@@ -36,8 +36,6 @@ export default function AddLearnerPage() {
     setError('');
     setSaving(true);
 
-    const passportId = `UP-C1-${String(Math.floor(Math.random() * 9000 + 1000)).padStart(4, '0')}-${form.pathway}`;
-
     const { data: learner, error: insertError } = await db.from('learners').insert({
       email: form.email.toLowerCase().trim(),
       first_name: form.first_name.trim(),
@@ -57,7 +55,6 @@ export default function AddLearnerPage() {
       portfolio_status: 'Not Started',
       capstone_status: 'Not Started',
       onboarding_complete: false,
-      passport_id: passportId,
       current_job_role: form.current_job_role || null,
       career_goal: form.career_goal || null,
       linkedin_url: form.linkedin_url || null,
@@ -82,7 +79,7 @@ export default function AddLearnerPage() {
       ).select();
     }
 
-    setSuccess(`${form.first_name} ${form.last_name} added successfully. Passport ID: ${passportId}`);
+    setSuccess(`${form.first_name} ${form.last_name} added successfully.`);
     setSaving(false);
 
     setTimeout(() => router.push('/admin/learners'), 1500);
