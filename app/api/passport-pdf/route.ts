@@ -458,7 +458,7 @@ function generatePassportHTML(
         <div style="font-size:11px;font-weight:700;color:#0F1A2E;margin-bottom:2px;">Upthrust Career Capability Accelerator</div>
         <div style="font-size:10px;color:#4A5468;margin-bottom:8px;">Cohort 1 &middot; ${issuedDate} &middot; This credential does not expire.</div>
         <div style="font-size:9px;color:#4A5468;line-height:1.55;margin-bottom:5px;">This credential is cryptographically signed and can be independently verified at the link below.</div>
-        <div style="font-size:9px;color:#A05A26;font-weight:600;margin-bottom:6px;">Verify at upthrustdigital.com/verify &middot; info@upthrustdigital.com</div>
+        <div style="font-size:9px;color:#A05A26;font-weight:600;margin-bottom:6px;">Verify at app.upthrustdigital.com/verify &middot; info@upthrustdigital.com</div>
         <div style="font-size:8px;color:#7A828E;font-style:italic;">This passport evidences assessed practical capability. It is not a guarantee of employment.</div>
       </div>
 
@@ -471,7 +471,7 @@ function generatePassportHTML(
           </div>
           <div style="width:130px;">
             <div style="font-size:10px;font-weight:700;color:#4A5468;line-height:1.45;margin-bottom:5px;">Scan to verify this credential</div>
-            <div style="font-size:10px;color:#A05A26;font-weight:600;">upthrustdigital.com/verify</div>
+            <div style="font-size:10px;color:#A05A26;font-weight:600;">app.upthrustdigital.com/verify</div>
           </div>
         </div>
       </div>` : ''}

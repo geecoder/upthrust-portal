@@ -224,7 +224,7 @@ export default async function VerifyPage({
         {/* Footer */}
         <div style={{ background: NAVY, padding: '14px 28px', textAlign: 'center' }}>
           <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, letterSpacing: 1 }}>
-            Verified at <strong style={{ color: GOLD }}>upthrustdigital.com/verify</strong>
+            Verified at <strong style={{ color: GOLD }}>app.upthrustdigital.com/verify</strong>
           </span>
         </div>
       </div>

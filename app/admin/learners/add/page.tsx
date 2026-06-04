@@ -176,7 +176,7 @@ export default function AddLearnerPage() {
       <div style={{ padding: '16px 20px', background: 'rgba(197,116,58,0.07)', border: '1px solid rgba(197,116,58,0.2)', borderRadius: 6, margin: '16px 0' }}>
         <p style={{ fontWeight: 700, color: 'var(--amber-deep)', marginBottom: 4 }}>After adding this learner</p>
         <div style={{ fontSize: '0.875rem', color: 'var(--ink-muted)', lineHeight: 1.7 }}>
-          <p>1. Send them the portal link: <strong>https://upthrust-portal-qj18.vercel.app</strong></p>
+          <p>1. Send them the portal link: <strong>https://app.upthrustdigital.com</strong></p>
           <p>2. They sign up with the same email address above</p>
           <p>3. The Clerk webhook automatically links their account (if webhook is set up)</p>
           <p>4. Or manually: go to Learner Detail → paste their Clerk User ID</p>

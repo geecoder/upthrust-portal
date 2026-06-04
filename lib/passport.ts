@@ -125,7 +125,7 @@ export function baseUrl(): string {
   // Prefer explicit public app URL; fall back to production domain.
   return (
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
-    'https://upthrustdigital.com'
+    'https://app.upthrustdigital.com'
   );
 }
 

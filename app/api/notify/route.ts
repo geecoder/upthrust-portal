@@ -61,7 +61,7 @@ function emailTemplate(
   ctaLabel?: string,
   ctaUrl?: string
 ) {
-  const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://upthrust-portal-qj18.vercel.app';
+  const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.upthrustdigital.com';
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -133,7 +133,7 @@ export async function POST(req: Request) {
   const { type, learnerId, assignmentId, weekNumber, pathway, score, customMessage, directEmail } = body;
 
   const db = createAdminClient();
-  const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://upthrust-portal-qj18.vercel.app';
+  const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.upthrustdigital.com';
 
   // Direct email path — send to an arbitrary address (admin custom emails)
   if (directEmail && customMessage) {
@@ -277,7 +277,7 @@ export async function GET(req: Request) {
 
   const results = await Promise.allSettled(
     learners.map(l =>
-      fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/notify`, {
+      fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://app.upthrustdigital.com'}/api/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Cookie: req.headers.get('cookie') || '' },
         body: JSON.stringify({ type: notifType, learnerId: l.id, weekNumber: parseInt(weekNumber) }),
