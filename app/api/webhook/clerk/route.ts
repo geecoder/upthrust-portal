@@ -59,11 +59,15 @@ async function verifyClerkWebhook(req: Request): Promise<{ event: string; data: 
 }
 
 export async function POST(req: Request) {
+  console.log('[Clerk Webhook] Received request');
+
   const payload = await verifyClerkWebhook(req.clone());
 
   if (!payload) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  console.log(`[Clerk Webhook] Signature verified — event: ${payload.event}`);
 
   const { event, data } = payload;
   const db = createAdminClient();
@@ -76,8 +80,11 @@ export async function POST(req: Request) {
     const lastName = data.last_name || '';
 
     if (!email) {
+      console.log('[Clerk Webhook] user.created — no email address on account, skipping');
       return NextResponse.json({ message: 'No email — skipping' });
     }
+
+    console.log(`[Clerk Webhook] user.created — clerkUserId: ${clerkUserId}, email: ${email}`);
 
     // Check if this email already exists in learners (manually added by Genesis)
     const { data: existing } = await db
@@ -85,6 +92,8 @@ export async function POST(req: Request) {
       .select('id, clerk_user_id, first_name, email')
       .ilike('email', email)
       .maybeSingle();
+
+    console.log(`[Clerk Webhook] Learner lookup result: ${existing ? `found id=${existing.id}, already_linked=${!!existing.clerk_user_id}` : 'no match — will create pending record'}`);
 
     if (existing) {
       if (existing.clerk_user_id && existing.clerk_user_id !== clerkUserId) {
@@ -95,7 +104,7 @@ export async function POST(req: Request) {
 
       if (!existing.clerk_user_id) {
         // Link this Clerk ID to the existing learner record
-        await db
+        const { error: updateError } = await db
           .from('learners')
           .update({
             clerk_user_id: clerkUserId,
@@ -105,6 +114,10 @@ export async function POST(req: Request) {
           })
           .eq('id', existing.id);
 
+        if (updateError) {
+          console.error(`[Clerk Webhook] Update failed for learner ${existing.id}:`, updateError.message);
+          return NextResponse.json({ error: 'Update failed' }, { status: 500 });
+        }
         console.log(`[Clerk Webhook] Linked ${email} → ${clerkUserId} (learner: ${existing.id})`);
         return NextResponse.json({ message: 'Linked successfully', learnerId: existing.id });
       }
