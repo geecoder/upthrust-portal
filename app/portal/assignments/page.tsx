@@ -54,7 +54,7 @@ const STATUS_COLOR: Record<string, string> = {
   'Submitted':                '#1D4ED8',
   'AI Reviewed':              '#7C3AED',
   'Human Reviewed':           '#1D4ED8',
-  'Resubmission Requested':   'var(--red)',
+  'Needs Revision':   'var(--red)',
   'Approved':                 'var(--moss)',
   'Portfolio Ready':          '#047857',
 };
@@ -64,7 +64,7 @@ const STATUS_BG: Record<string, string> = {
   'Submitted':                'rgba(37,99,235,0.08)',
   'AI Reviewed':              'rgba(124,58,237,0.08)',
   'Human Reviewed':           'rgba(29,78,216,0.08)',
-  'Resubmission Requested':   'rgba(179,56,44,0.08)',
+  'Needs Revision':   'rgba(179,56,44,0.08)',
   'Approved':                 'rgba(5,150,105,0.08)',
   'Portfolio Ready':          'rgba(4,120,87,0.1)',
 };
@@ -126,7 +126,7 @@ export default async function AssignmentsPage() {
   const submitted     = assignments.filter(a => a.status !== 'Not Started').length;
   const approved      = assignments.filter(a => a.status === 'Approved' || a.status === 'Portfolio Ready' || a.portfolio_approved).length;
   const pendingFb     = assignments.filter(a => a.status === 'Submitted' || a.status === 'AI Reviewed').length;
-  const needsResub    = assignments.filter(a => a.status === 'Resubmission Requested').length;
+  const needsResub    = assignments.filter(a => a.status === 'Needs Revision').length;
 
   function getAssignment(weekNum: number): Assignment | undefined {
     return assignments.find(a => a.week_number === weekNum && a.pathway === pathway);
@@ -297,7 +297,7 @@ export default async function AssignmentsPage() {
                     <p style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', lineHeight: 1.7, fontStyle: 'italic' }}>
                       "{myAssign.feedback}"
                     </p>
-                    {myAssign.status === 'Resubmission Requested' && (
+                    {myAssign.status === 'Needs Revision' && (
                       <p style={{ fontSize: '0.8125rem', color: 'var(--red)', fontWeight: 600, marginTop: 10 }}>
                         ↩ Revision required — read the feedback above and use the resubmit button below.
                       </p>

@@ -37,11 +37,11 @@ export default function AdminReviewsPage() {
 
   const filtered = assignments.filter(a => {
     if (filter === 'pending') return a.status === 'Submitted' || a.status === 'AI Reviewed';
-    if (filter === 'resubmission') return a.status === 'Resubmission Requested';
+    if (filter === 'resubmission') return a.status === 'Needs Revision';
     return a.status !== 'Not Started';
   });
 
-  async function submitFeedback(status: 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Portfolio Ready') {
+  async function submitFeedback(status: 'Human Reviewed' | 'Needs Revision' | 'Approved' | 'Portfolio Ready') {
     if (!selected) return;
     setSaving(true);
     const res = await fetch('/api/admin/data', {
@@ -63,7 +63,7 @@ export default function AdminReviewsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: status === 'Resubmission Requested' ? 'resubmission_required' : 'feedback_ready',
+          type: status === 'Needs Revision' ? 'resubmission_required' : 'feedback_ready',
           learnerId: selected.learner_id,
           assignmentId: selected.id,
         }),
@@ -121,7 +121,7 @@ export default function AdminReviewsPage() {
                 {label}
                 <span style={{ marginLeft: 5, fontSize: '0.6875rem', fontWeight: 700, color: filter === val ? 'var(--amber-deep)' : 'var(--ink-muted)' }}>
                   ({val === 'pending' ? assignments.filter(a => a.status === 'Submitted' || a.status === 'AI Reviewed').length
-                    : val === 'resubmission' ? assignments.filter(a => a.status === 'Resubmission Requested').length
+                    : val === 'resubmission' ? assignments.filter(a => a.status === 'Needs Revision').length
                     : assignments.filter(a => a.status !== 'Not Started').length})
                 </span>
               </button>
@@ -286,7 +286,7 @@ export default function AdminReviewsPage() {
                   className="btn btn-primary" style={{ background: 'var(--amber-deep)' }}>
                   ⭐ Approve + Portfolio Ready
                 </button>
-                <button onClick={() => submitFeedback('Resubmission Requested')} disabled={!feedback || saving}
+                <button onClick={() => submitFeedback('Needs Revision')} disabled={!feedback || saving}
                   className="btn btn-outline">
                   ↩ Request Resubmission
                 </button>

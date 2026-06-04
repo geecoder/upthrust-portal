@@ -3,7 +3,7 @@ export type Tier = 'Standard' | 'Premium' | 'VIP' | 'Corporate';
 export type RiskStatus = 'Green' | 'Amber' | 'Red';
 export type EnrollmentStatus = 'Pending' | 'Active' | 'Completed' | 'Withdrawn';
 export type PassportEligibility = 'Not Eligible' | 'Pending Review' | 'Approved' | 'Withheld' | 'Needs Revision';
-export type AssignmentStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'AI Reviewed' | 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Portfolio Ready';
+export type AssignmentStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'AI Reviewed' | 'Human Reviewed' | 'Needs Revision' | 'Approved' | 'Portfolio Ready';
 export type Phase = 'Foundation' | 'Core Skills' | 'Delivery' | 'Capstone';
 export type CapabilityLevel = 'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Portfolio Ready';
 export type ResourceType = 
@@ -272,7 +272,7 @@ export const ASSIGNMENT_STATUS_COLOR: Record<string, string> = {
   'Submitted': '#2563EB',
   'AI Reviewed': '#7C3AED',
   'Human Reviewed': '#1D4ED8',
-  'Resubmission Requested': '#DC2626',
+  'Needs Revision': '#DC2626',
   'Approved': '#059669',
   'Portfolio Ready': '#047857',
 };
@@ -283,7 +283,7 @@ export const ASSIGNMENT_STATUS_BG: Record<string, string> = {
   'Submitted': 'rgba(37,99,235,0.1)',
   'AI Reviewed': 'rgba(124,58,237,0.1)',
   'Human Reviewed': 'rgba(29,78,216,0.1)',
-  'Resubmission Requested': 'rgba(220,38,38,0.1)',
+  'Needs Revision': 'rgba(220,38,38,0.1)',
   'Approved': 'rgba(5,150,105,0.1)',
   'Portfolio Ready': 'rgba(4,120,87,0.1)',
 };

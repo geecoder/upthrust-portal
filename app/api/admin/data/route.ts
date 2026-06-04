@@ -204,8 +204,8 @@ export async function POST(req: Request) {
         if (a?.learner_id) {
           await db.from('notifications').insert({
             learner_id: a.learner_id,
-            type: status === 'Resubmission Requested' ? 'resubmission_required' : 'feedback_ready',
-            title: status === 'Resubmission Requested'
+            type: status === 'Needs Revision' ? 'resubmission_required' : 'feedback_ready',
+            title: status === 'Needs Revision'
               ? `↩ Revision requested — Week ${a.week_number}`
               : `✓ Feedback ready — Week ${a.week_number}`,
             message: feedback || 'Genesis has reviewed your submission.',

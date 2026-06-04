@@ -180,7 +180,7 @@ export async function POST(req: Request) {
     .eq('pathway', pathway)
     .maybeSingle();
 
-  const isResubmission = existing?.status === 'Resubmission Requested';
+  const isResubmission = existing?.status === 'Needs Revision';
   const resubCount = isResubmission ? (existing?.resubmission_count ?? 0) + 1 : 0;
 
   // 3. Upsert the assignment
