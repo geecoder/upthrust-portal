@@ -3,20 +3,12 @@ export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
 import Link from 'next/link';
 
 const COUNTRIES = ['Nigeria', 'United Kingdom', 'Canada', 'United States', 'Ghana', 'Kenya', 'South Africa', 'Other'];
-const CAPABILITY_AREAS = [
-  'Product Thinking', 'Business Analysis', 'Discovery & Problem Framing',
-  'Requirements & Documentation', 'Stakeholder Management', 'Delivery & Agile Collaboration',
-  'Communication & Facilitation', 'Strategy & Commercial Thinking',
-  'AI-enabled Professional Practice', 'Portfolio & Career Readiness',
-];
 
 export default function AddLearnerPage() {
   const router = useRouter();
-  const db = createBrowserClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -36,47 +28,17 @@ export default function AddLearnerPage() {
     setError('');
     setSaving(true);
 
-    const { data: learner, error: insertError } = await db.from('learners').insert({
-      email: form.email.toLowerCase().trim(),
-      first_name: form.first_name.trim(),
-      last_name: form.last_name.trim() || null,
-      phone: form.phone || null,
-      country: form.country,
-      pathway: form.pathway,
-      tier: form.tier,
-      cohort: 'Cohort 1',
-      enrollment_status: 'Active',
-      attendance_pct: 0,
-      assignment_completion_pct: 0,
-      avg_score: 0,
-      risk_status: 'Green',
-      passport_eligibility: 'Not Eligible',
-      passport_issued: false,
-      portfolio_status: 'Not Started',
-      capstone_status: 'Not Started',
-      onboarding_complete: false,
-      current_job_role: form.current_job_role || null,
-      career_goal: form.career_goal || null,
-      linkedin_url: form.linkedin_url || null,
-    }).select().single();
+    const res = await fetch('/api/admin/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_learner', learner: form }),
+    });
+    const json = await res.json();
 
-    if (insertError) {
-      if (insertError.code === '23505') {
-        setError('A learner with this email already exists.');
-      } else {
-        setError(`Failed to add learner: ${insertError.message}`);
-      }
+    if (!res.ok) {
+      setError(json.error || 'Failed to add learner.');
       setSaving(false);
       return;
-    }
-
-    // Seed capability scores
-    if (learner) {
-      await db.from('capability_scores').insert(
-        CAPABILITY_AREAS.map(cap => ({
-          learner_id: learner.id, capability: cap, level: 'Not Started', score: 0,
-        }))
-      ).select();
     }
 
     setSuccess(`${form.first_name} ${form.last_name} added successfully.`);

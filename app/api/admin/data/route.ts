@@ -303,6 +303,53 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true });
       }
 
+      // ─────────────────────────────────────────────────────────
+      // ADMIN: add a new learner + seed capability scores
+      // ─────────────────────────────────────────────────────────
+      case 'add_learner': {
+        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+        const { learner: l } = body;
+        const { data: created, error } = await db.from('learners').insert({
+          email: l.email.toLowerCase().trim(),
+          first_name: l.first_name.trim(),
+          last_name: l.last_name?.trim() || null,
+          phone: l.phone || null,
+          country: l.country,
+          pathway: l.pathway,
+          tier: l.tier,
+          cohort: 'Cohort 1',
+          enrollment_status: 'Active',
+          attendance_pct: 0,
+          assignment_completion_pct: 0,
+          avg_score: 0,
+          risk_status: 'Green',
+          passport_eligibility: 'Not Eligible',
+          passport_issued: false,
+          portfolio_status: 'Not Started',
+          capstone_status: 'Not Started',
+          onboarding_complete: false,
+          current_job_role: l.current_job_role || null,
+          career_goal: l.career_goal || null,
+          linkedin_url: l.linkedin_url || null,
+        }).select().maybeSingle();
+        if (error) {
+          if (error.code === '23505') return NextResponse.json({ error: 'A learner with this email already exists.' }, { status: 409 });
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+        if (created) {
+          const CAPABILITY_AREAS = [
+            'Product Thinking', 'Business Analysis', 'Discovery & Problem Framing',
+            'Requirements & Documentation', 'Stakeholder Management', 'Delivery & Agile Collaboration',
+            'Communication & Facilitation', 'Strategy & Commercial Thinking',
+            'AI-enabled Professional Practice', 'Portfolio & Career Readiness',
+          ];
+          await db.from('capability_scores').insert(
+            CAPABILITY_AREAS.map(cap => ({ learner_id: created.id, capability: cap, level: 'Not Started', score: 0 }))
+          );
+        }
+        return NextResponse.json({ success: true, learner: created });
+      }
+
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
