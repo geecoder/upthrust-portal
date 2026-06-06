@@ -1,8 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
-import { createBrowserClient } from '@/lib/supabase';
+import { useState, useEffect, useCallback } from 'react';
 import type { Learner, Attendance } from '@/lib/types';
 import { WEEK_DATES } from '@/lib/types';
 
@@ -12,77 +11,135 @@ function getCurrentWeek() {
   return Math.min(Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 7)), 12);
 }
 
+const ARRIVALS = ['On Time', 'Late', 'Absent', 'Excused'] as const;
+type Arrival = typeof ARRIVALS[number];
+
+function arrivalColor(status: string) {
+  return status === 'Absent' ? 'var(--red)'
+    : status === 'On Time' ? 'var(--moss)'
+    : status === 'Late' ? 'var(--amber-deep)'
+    : 'var(--ink-muted)';
+}
+function arrivalBg(status: string) {
+  return status === 'Absent' ? 'rgba(220,38,38,0.1)'
+    : status === 'On Time' ? 'rgba(5,150,105,0.1)'
+    : status === 'Late' ? 'rgba(217,119,6,0.1)'
+    : 'rgba(107,114,128,0.1)';
+}
+
 export default function AttendancePage() {
   const [learners, setLearners] = useState<Learner[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [selectedWeek, setSelectedWeek] = useState(getCurrentWeek());
-  const [saving, setSaving] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);   // learnerId | 'all-present' | 'all-absent'
+  const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
-  const db = createBrowserClient();
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/data?resource=attendance');
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        setError(e.error || 'Could not load learners. Please refresh.');
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      setLearners((data.learners || []) as Learner[]);
+      setAttendance((data.attendance || []) as Attendance[]);
+      setError('');
+    } catch {
+      setError('Network error loading attendance. Please refresh.');
+    }
+    setLoading(false);
+  }, []);
 
-  useEffect(() => { load(); }, []);
-
-  async function load() {
-    const [{ data: l }, { data: a }] = await Promise.all([
-      db.from('learners').select('*').eq('enrollment_status', 'Active').order('first_name'),
-      db.from('attendance').select('*'),
-    ]);
-    setLearners((l || []) as Learner[]);
-    setAttendance((a || []) as Attendance[]);
-  }
+  useEffect(() => { load(); }, [load]);
 
   function getAttendance(learnerId: string, weekNum: number) {
     return attendance.find(a => a.learner_id === learnerId && a.week_number === weekNum);
   }
 
-  async function markAttendance(learnerId: string, weekNum: number, arrival: string) {
+  function flashSaved() {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  }
+
+  async function markAttendance(learnerId: string, weekNum: number, arrival: Arrival) {
     setSaving(learnerId);
-    const existing = getAttendance(learnerId, weekNum);
-    const record = {
-      learner_id: learnerId,
-      week_number: weekNum,
-      attended: arrival !== 'Absent',
-      arrival,
-      session_date: WEEK_DATES.find(w => w.week === weekNum)?.session,
-    };
-    if (existing) {
-      await db.from('attendance').update(record).eq('id', existing.id);
-    } else {
-      await db.from('attendance').insert(record);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mark_attendance',
+          learnerId,
+          weekNumber: weekNum,
+          arrival,
+          sessionDate: WEEK_DATES.find(w => w.week === weekNum)?.session || null,
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        setError(e.error || 'Could not save attendance. Please try again.');
+        setSaving(null);
+        return;
+      }
+      await load();
+      flashSaved();
+    } catch {
+      setError('Network error. Please try again.');
     }
-    // Update learner attendance percentage
-    const { data: allAttendance } = await db.from('attendance').select('*').eq('learner_id', learnerId);
-    const attended = (allAttendance || []).filter((a: any) => a.attended).length;
-    const total = Math.max(selectedWeek + 1, 1);
-    const pct = Math.round((attended / total) * 100);
-    await db.from('learners').update({ attendance_pct: pct }).eq('id', learnerId);
-    await load();
     setSaving(null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
   }
 
-  async function markAll(arrival: string) {
-    setSaving('all');
-    for (const learner of learners) {
-      const existing = getAttendance(learner.id, selectedWeek);
-      const record = {
-        learner_id: learner.id, week_number: selectedWeek,
-        attended: arrival !== 'Absent', arrival,
-      };
-      if (existing) await db.from('attendance').update(record).eq('id', existing.id);
-      else await db.from('attendance').insert(record);
+  async function markAll(arrival: Arrival) {
+    setSaving(arrival === 'Absent' ? 'all-absent' : 'all-present');
+    setError('');
+    try {
+      const res = await fetch('/api/admin/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mark_all_attendance',
+          weekNumber: selectedWeek,
+          arrival,
+          sessionDate: WEEK_DATES.find(w => w.week === selectedWeek)?.session || null,
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        setError(e.error || 'Could not mark all. Please try again.');
+        setSaving(null);
+        return;
+      }
+      await load();
+      flashSaved();
+    } catch {
+      setError('Network error. Please try again.');
     }
-    await load();
     setSaving(null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
   }
 
-  const weekInfo = WEEK_DATES.find(w => w.week === selectedWeek);
+  async function saveNote(learnerId: string, weekNum: number, note: string) {
+    try {
+      await fetch('/api/admin/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_attendance_note', learnerId, weekNumber: weekNum, note }),
+      });
+      await load();
+    } catch {
+      setError('Could not save note.');
+    }
+  }
+
   const weekAttendance = attendance.filter(a => a.week_number === selectedWeek);
   const attendedCount = weekAttendance.filter(a => a.attended).length;
+  const markedCount = weekAttendance.length;
+  const allBusy = saving === 'all-present' || saving === 'all-absent';
 
   return (
     <div className="portal-content">
@@ -93,8 +150,9 @@ export default function AttendancePage() {
       </div>
 
       {saved && <div style={{ padding: '10px 16px', background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.3)', borderRadius: 6, marginBottom: 16, color: 'var(--moss)', fontWeight: 600 }}>✓ Attendance saved</div>}
+      {error && <div style={{ padding: '10px 16px', background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)', borderRadius: 6, marginBottom: 16, color: 'var(--red)', fontWeight: 600 }}>⚠ {error}</div>}
 
-      {/* Week selector */}
+      {/* Week selector + summary + bulk actions */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div>
@@ -111,15 +169,20 @@ export default function AttendancePage() {
               <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Attended</p>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => markAll('On Time')} disabled={saving === 'all'} className="btn btn-primary btn-sm">
-                Mark All Present
+              <button onClick={() => markAll('On Time')} disabled={allBusy || learners.length === 0} className="btn btn-primary btn-sm">
+                {saving === 'all-present' ? 'Marking…' : 'Mark All Present'}
               </button>
-              <button onClick={() => markAll('Absent')} disabled={saving === 'all'} className="btn btn-outline btn-sm">
-                Mark All Absent
+              <button onClick={() => markAll('Absent')} disabled={allBusy || learners.length === 0} className="btn btn-outline btn-sm">
+                {saving === 'all-absent' ? 'Marking…' : 'Mark All Absent'}
               </button>
             </div>
           </div>
         </div>
+        {markedCount > 0 && (
+          <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', marginTop: 10 }}>
+            {markedCount} of {learners.length} marked for this session.
+          </p>
+        )}
       </div>
 
       {/* Attendance table */}
@@ -137,18 +200,21 @@ export default function AttendancePage() {
               </tr>
             </thead>
             <tbody>
-              {learners.map(learner => {
+              {loading && (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-muted)' }}>Loading learners…</td></tr>
+              )}
+              {!loading && learners.map(learner => {
                 const rec = getAttendance(learner.id, selectedWeek);
                 const isSaving = saving === learner.id;
                 return (
-                  <tr key={learner.id}>
+                  <tr key={learner.id} style={{ opacity: isSaving ? 0.6 : 1 }}>
                     <td>
                       <p style={{ fontWeight: 600 }}>{learner.first_name} {learner.last_name}</p>
                       <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>{learner.email}</p>
                     </td>
                     <td>
                       <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '2px 7px', borderRadius: 100, background: learner.pathway === 'PM' ? 'rgba(15,26,46,0.08)' : 'rgba(160,90,38,0.1)', color: learner.pathway === 'PM' ? 'var(--ink)' : 'var(--amber-deep)' }}>
-                        {learner.pathway}
+                        {learner.pathway || '—'}
                       </span>
                     </td>
                     <td>
@@ -157,21 +223,24 @@ export default function AttendancePage() {
                       </p>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {(['On Time', 'Late', 'Absent', 'Excused'] as const).map(status => (
-                          <button key={status} onClick={() => markAttendance(learner.id, selectedWeek, status)}
-                            disabled={isSaving}
-                            style={{
-                              padding: '5px 10px', border: `1.5px solid ${rec?.arrival === status ? (status === 'Absent' ? 'var(--red)' : status === 'On Time' ? 'var(--moss)' : status === 'Late' ? 'var(--amber-deep)' : 'var(--ink-muted)') : 'var(--paper-line)'}`,
-                              borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600,
-                              background: rec?.arrival === status ? (status === 'Absent' ? 'rgba(220,38,38,0.1)' : status === 'On Time' ? 'rgba(5,150,105,0.1)' : status === 'Late' ? 'rgba(217,119,6,0.1)' : 'rgba(107,114,128,0.1)') : 'transparent',
-                              color: rec?.arrival === status ? (status === 'Absent' ? 'var(--red)' : status === 'On Time' ? 'var(--moss)' : status === 'Late' ? 'var(--amber-deep)' : 'var(--ink-muted)') : 'var(--ink-muted)',
-                              opacity: isSaving ? 0.5 : 1,
-                            }}
-                          >
-                            {status}
-                          </button>
-                        ))}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {ARRIVALS.map(status => {
+                          const active = rec?.arrival === status;
+                          return (
+                            <button key={status} onClick={() => markAttendance(learner.id, selectedWeek, status)}
+                              disabled={isSaving}
+                              style={{
+                                padding: '6px 11px', minHeight: 32,
+                                border: `1.5px solid ${active ? arrivalColor(status) : 'var(--paper-line)'}`,
+                                borderRadius: 4, cursor: isSaving ? 'wait' : 'pointer', fontSize: '0.75rem', fontWeight: 600,
+                                background: active ? arrivalBg(status) : 'transparent',
+                                color: active ? arrivalColor(status) : 'var(--ink-muted)',
+                              }}
+                            >
+                              {status}
+                            </button>
+                          );
+                        })}
                       </div>
                     </td>
                     <td>
@@ -188,17 +257,21 @@ export default function AttendancePage() {
                         className="form-input"
                         style={{ padding: '4px 8px', fontSize: '0.75rem' }}
                         defaultValue={rec?.notes || ''}
+                        key={`${learner.id}-${selectedWeek}-${rec?.notes || ''}`}
                         placeholder="Optional note..."
-                        onBlur={async (e) => {
-                          if (rec) await db.from('attendance').update({ notes: e.target.value }).eq('id', rec.id);
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v !== (rec?.notes || '')) saveNote(learner.id, selectedWeek, v);
                         }}
                       />
                     </td>
                   </tr>
                 );
               })}
-              {learners.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-muted)' }}>No active learners to mark attendance for.</td></tr>
+              {!loading && learners.length === 0 && (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-muted)' }}>
+                  No learners found. Add learners under Admin → All Learners, or check that they aren&apos;t marked Withdrawn.
+                </td></tr>
               )}
             </tbody>
           </table>

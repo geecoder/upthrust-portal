@@ -288,6 +288,94 @@ export async function POST(req: Request) {
       }
 
       // ─────────────────────────────────────────────────────────
+      // ADMIN: attendance marking (single + bulk).
+      // Recomputes the learner's attendance_pct over sessions held so far.
+      // ─────────────────────────────────────────────────────────
+      case 'mark_attendance': {
+        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+        const { learnerId, weekNumber, arrival, sessionDate, note } = body;
+        if (!learnerId || weekNumber === undefined || !arrival)
+          return NextResponse.json({ error: 'learnerId, weekNumber and arrival are required' }, { status: 400 });
+
+        const record: Record<string, any> = {
+          learner_id: learnerId,
+          week_number: weekNumber,
+          attended: arrival !== 'Absent',
+          arrival,
+          session_date: sessionDate || null,
+        };
+        if (note !== undefined) record.notes = note;
+
+        // Upsert: update existing row for this learner+week, else insert.
+        const { data: existing } = await db.from('attendance').select('id')
+          .eq('learner_id', learnerId).eq('week_number', weekNumber).maybeSingle();
+        if (existing) {
+          const { error } = await db.from('attendance').update(record).eq('id', existing.id);
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        } else {
+          const { error } = await db.from('attendance').insert(record);
+          if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        // Recompute attendance_pct over sessions held so far (weeks 0..weekNumber).
+        const sessionsHeld = Math.max(weekNumber + 1, 1);
+        const { data: allAtt } = await db.from('attendance').select('attended')
+          .eq('learner_id', learnerId);
+        const attended = (allAtt || []).filter((a: any) => a.attended).length;
+        const pct = Math.round((attended / sessionsHeld) * 100);
+        await db.from('learners').update({ attendance_pct: pct }).eq('id', learnerId);
+
+        return NextResponse.json({ success: true, attendance_pct: pct });
+      }
+
+      case 'mark_all_attendance': {
+        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+        const { weekNumber, arrival, sessionDate } = body;
+        if (weekNumber === undefined || !arrival)
+          return NextResponse.json({ error: 'weekNumber and arrival are required' }, { status: 400 });
+
+        const { data: learners } = await db.from('learners').select('id')
+          .neq('enrollment_status', 'Withdrawn');
+        const { data: existingRows } = await db.from('attendance').select('id, learner_id')
+          .eq('week_number', weekNumber);
+        const existingByLearner = new Map((existingRows || []).map((r: any) => [r.learner_id, r.id]));
+
+        const sessionsHeld = Math.max(weekNumber + 1, 1);
+        for (const l of (learners || [])) {
+          const record = {
+            learner_id: l.id,
+            week_number: weekNumber,
+            attended: arrival !== 'Absent',
+            arrival,
+            session_date: sessionDate || null,
+          };
+          const existingId = existingByLearner.get(l.id);
+          if (existingId) await db.from('attendance').update(record).eq('id', existingId);
+          else await db.from('attendance').insert(record);
+
+          const { data: allAtt } = await db.from('attendance').select('attended').eq('learner_id', l.id);
+          const attended = (allAtt || []).filter((a: any) => a.attended).length;
+          const pct = Math.round((attended / sessionsHeld) * 100);
+          await db.from('learners').update({ attendance_pct: pct }).eq('id', l.id);
+        }
+        return NextResponse.json({ success: true });
+      }
+
+      case 'update_attendance_note': {
+        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+        const { learnerId, weekNumber, note } = body;
+        const { data: existing } = await db.from('attendance').select('id')
+          .eq('learner_id', learnerId).eq('week_number', weekNumber).maybeSingle();
+        if (existing) {
+          await db.from('attendance').update({ notes: note || null }).eq('id', existing.id);
+        } else {
+          // No row yet — create a minimal one so the note isn't lost.
+          await db.from('attendance').insert({ learner_id: learnerId, week_number: weekNumber, notes: note || null, attended: false });
+        }
+        return NextResponse.json({ success: true });
+      }
+
+      // ─────────────────────────────────────────────────────────
       // ADMIN: create / update a resource (fixes vanishing links)
       // Writes through service role so the payload is never dropped.
       // ─────────────────────────────────────────────────────────
@@ -372,6 +460,15 @@ export async function GET(req: Request) {
         if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
         const { data } = await db.from('learners').select('*').order('first_name');
         return NextResponse.json({ learners: data || [] });
+      }
+      case 'attendance': {
+        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+        // Learners + all attendance rows in one call (admin client bypasses RLS).
+        const [{ data: learners }, { data: attendance }] = await Promise.all([
+          db.from('learners').select('*').neq('enrollment_status', 'Withdrawn').order('first_name'),
+          db.from('attendance').select('*'),
+        ]);
+        return NextResponse.json({ learners: learners || [], attendance: attendance || [] });
       }
       case 'review_queue': {
         if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
