@@ -87,9 +87,9 @@ export default async function DashboardPage() {
     if (!thisWeek) return { label: 'Program starts June 6', href: '/portal/week', icon: '📅', urgent: false };
     if (!thisWeekAssignment || thisWeekAssignment.status === 'Not Started')
       return { label: `Submit Week ${currentWeek} Assignment`, href: '/portal/assignments', icon: '📝', urgent: true };
-    if (thisWeekAssignment.status === 'Needs Revision')
+    if (thisWeekAssignment.status === 'Resubmission Requested')
       return { label: `Resubmit Week ${currentWeek} — Revisions needed`, href: '/portal/assignments', icon: '↩', urgent: true };
-    if (typedAssignments.some(a => a.feedback && a.status === 'Needs Revision'))
+    if (typedAssignments.some(a => a.feedback && a.status === 'Resubmission Requested'))
       return { label: 'You have assignments needing resubmission', href: '/portal/assignments', icon: '↩', urgent: true };
     if (newFeedback.length > 0)
       return { label: `Read new feedback on ${newFeedback.length} assignment${newFeedback.length > 1 ? 's' : ''}`, href: '/portal/assignments', icon: '💬', urgent: false };
@@ -212,7 +212,7 @@ export default async function DashboardPage() {
               )}
 
               {/* Assignment status */}
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', background: thisWeekAssignment?.status === 'Approved' || thisWeekAssignment?.status === 'Portfolio Ready' ? 'rgba(5,150,105,0.06)' : thisWeekAssignment?.status === 'Needs Revision' ? 'rgba(220,38,38,0.06)' : 'var(--paper-soft)', borderRadius: 6 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', background: thisWeekAssignment?.status === 'Approved' || thisWeekAssignment?.status === 'Portfolio Ready' ? 'rgba(5,150,105,0.06)' : thisWeekAssignment?.status === 'Resubmission Requested' ? 'rgba(220,38,38,0.06)' : 'var(--paper-soft)', borderRadius: 6 }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-muted)', marginBottom: 4 }}>
                     {pathway} Assignment: {pathway === 'PM' ? thisWeek.pm_assignment_title : thisWeek.ba_assignment_title}
@@ -227,7 +227,7 @@ export default async function DashboardPage() {
                   </div>
                 </div>
                 <Link href="/portal/assignments" className="btn btn-sm btn-primary">
-                  {!thisWeekAssignment || thisWeekAssignment.status === 'Not Started' ? 'Submit' : thisWeekAssignment.status === 'Needs Revision' ? 'Resubmit' : 'View'}
+                  {!thisWeekAssignment || thisWeekAssignment.status === 'Not Started' ? 'Submit' : thisWeekAssignment.status === 'Resubmission Requested' ? 'Resubmit' : 'View'}
                 </Link>
               </div>
             </div>
@@ -252,7 +252,7 @@ export default async function DashboardPage() {
                     {a.score && <span style={{ fontFamily: 'Fraunces, serif', fontSize: '1rem', color: 'var(--amber-deep)' }}>{a.score}/100</span>}
                   </div>
                   <p style={{ fontSize: '0.875rem', color: 'var(--ink-soft)', lineHeight: 1.6, fontStyle: 'italic' }}>"{a.feedback?.substring(0, 180)}{(a.feedback?.length || 0) > 180 ? '...' : ''}"</p>
-                  {a.status === 'Needs Revision' && (
+                  {a.status === 'Resubmission Requested' && (
                     <Link href="/portal/assignments" className="btn btn-sm" style={{ marginTop: 10, background: 'var(--red)', color: 'var(--paper)', display: 'inline-flex' }}>
                       ↩ Resubmit Required
                     </Link>
@@ -286,7 +286,7 @@ export default async function DashboardPage() {
                     <span style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
                       {weekAssign?.status === 'Approved' || weekAssign?.status === 'Portfolio Ready' ? '✓' :
                        weekAssign?.status === 'Submitted' || weekAssign?.status === 'AI Reviewed' ? '⏳' :
-                       weekAssign?.status === 'Needs Revision' ? '↩' :
+                       weekAssign?.status === 'Resubmission Requested' ? '↩' :
                        isCurrent ? <span style={{ color: 'var(--amber-deep)' }}>NOW</span> : ''}
                     </span>
                   </Link>

@@ -25,6 +25,7 @@ export default function InterviewPage() {
   const [loading, setLoading] = useState(false);
   const [showModel, setShowModel] = useState(false);
   const [history, setHistory] = useState<{ question: string; score: number }[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -51,25 +52,35 @@ export default function InterviewPage() {
   async function submitAnswer() {
     if (!selected || !answer.trim() || !learner) return;
     setLoading(true);
-    const res = await fetch('/api/interview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pathway: learner.pathway,
-        questionId: selected.id,
-        userAnswer: answer,
-        mode: 'evaluate'
-      })
-    });
-    const data = await res.json();
-    setResult(data);
-    setLoading(false);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/interview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pathway: learner.pathway,
+          questionId: selected.id,
+          userAnswer: answer,
+          mode: 'evaluate'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.evaluation) {
+        setErrorMsg(data.error || 'The coach could not evaluate your answer right now. Please try again in a moment.');
+        setLoading(false);
+        return;
+      }
+      setResult(data);
 
-    // Extract score from evaluation
-    const scoreMatch = data.evaluation?.match(/Score:\s*(\d+)\/100/);
-    if (scoreMatch) {
-      setHistory(h => [...h, { question: selected.question.substring(0, 60) + '...', score: parseInt(scoreMatch[1]) }]);
+      // Extract score from evaluation
+      const scoreMatch = data.evaluation?.match(/Score:\s*(\d+)\/100/);
+      if (scoreMatch) {
+        setHistory(h => [...h, { question: selected.question.substring(0, 60) + '...', score: parseInt(scoreMatch[1]) }]);
+      }
+    } catch {
+      setErrorMsg('Network error. Check your connection and try again.');
     }
+    setLoading(false);
   }
 
   function nextQuestion() {
@@ -229,6 +240,11 @@ export default function InterviewPage() {
                       Write at least 20 words for meaningful feedback
                     </p>
                   )}
+                  {errorMsg && (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--red, #C0392B)', marginTop: 10, fontWeight: 600 }}>
+                      ⚠ {errorMsg}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -250,7 +266,7 @@ export default function InterviewPage() {
                     </p>
                     <div
                       style={{ fontSize: '0.9375rem', lineHeight: 1.75, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap' }}
-                      dangerouslySetInnerHTML={{ __html: result.evaluation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
+                      dangerouslySetInnerHTML={{ __html: (result.evaluation || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
                     />
                   </div>
 

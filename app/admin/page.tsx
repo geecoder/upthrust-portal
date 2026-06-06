@@ -42,7 +42,7 @@ export default async function AdminDashboard() {
   // Stats
   const active = typedLearners.filter(l => l.enrollment_status === 'Active');
   const pending = typedAssignments.filter(a => a.status === 'Submitted' || a.status === 'AI Reviewed');
-  const resubRequired = typedAssignments.filter(a => a.status === 'Needs Revision');
+  const resubRequired = typedAssignments.filter(a => a.status === 'Resubmission Requested');
   const portfolioReady = typedAssignments.filter(a => a.status === 'Portfolio Ready' || a.portfolio_approved);
   const redLearners = typedLearners.filter(l => l.risk_status === 'Red');
   const amberLearners = typedLearners.filter(l => l.risk_status === 'Amber');

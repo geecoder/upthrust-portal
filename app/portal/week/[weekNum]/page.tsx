@@ -193,7 +193,7 @@ export default async function WeekDetailPage({ params }: { params: Promise<{ wee
                       </span>
                     )}
                     <Link href="/portal/assignments" className="btn btn-sm btn-primary">
-                      {assignStatus === 'Not Started' ? 'Submit Work' : assignStatus === 'Needs Revision' ? 'Resubmit →' : 'View Status'}
+                      {assignStatus === 'Not Started' ? 'Submit Work' : assignStatus === 'Resubmission Requested' ? 'Resubmit →' : 'View Status'}
                     </Link>
                   </div>
                 )}

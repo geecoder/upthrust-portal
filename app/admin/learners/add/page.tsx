@@ -3,18 +3,26 @@ export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createBrowserClient } from '@/lib/supabase';
 import Link from 'next/link';
 
 const COUNTRIES = ['Nigeria', 'United Kingdom', 'Canada', 'United States', 'Ghana', 'Kenya', 'South Africa', 'Other'];
+const CAPABILITY_AREAS = [
+  'Product Thinking', 'Business Analysis', 'Discovery & Problem Framing',
+  'Requirements & Documentation', 'Stakeholder Management', 'Delivery & Agile Collaboration',
+  'Communication & Facilitation', 'Strategy & Commercial Thinking',
+  'AI-enabled Professional Practice', 'Portfolio & Career Readiness',
+];
 
 export default function AddLearnerPage() {
   const router = useRouter();
+  const db = createBrowserClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [form, setForm] = useState({
     first_name: '', last_name: '', email: '', phone: '',
-    country: 'Nigeria', pathway: 'PM', tier: 'Standard',
+    country: 'Nigeria', pathway: '', tier: 'Standard',
     current_job_role: '', career_goal: '', linkedin_url: '',
   });
 
@@ -22,26 +30,59 @@ export default function AddLearnerPage() {
 
   async function handleSubmit() {
     if (!form.first_name || !form.email || !form.pathway) {
-      setError('First name, email, and pathway are required.');
+      setError('First name, email, and pathway are required. Please choose PM or BA.');
       return;
     }
     setError('');
     setSaving(true);
 
-    const res = await fetch('/api/admin/data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'add_learner', learner: form }),
-    });
-    const json = await res.json();
+    const passportId = `UP-C1-${String(Math.floor(Math.random() * 9000 + 1000)).padStart(4, '0')}-${form.pathway}`;
 
-    if (!res.ok) {
-      setError(json.error || 'Failed to add learner.');
+    const { data: learner, error: insertError } = await db.from('learners').insert({
+      email: form.email.toLowerCase().trim(),
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim() || null,
+      phone: form.phone || null,
+      country: form.country,
+      pathway: form.pathway,
+      tier: form.tier,
+      cohort: 'Cohort 1',
+      enrollment_status: 'Active',
+      attendance_pct: 0,
+      assignment_completion_pct: 0,
+      avg_score: 0,
+      risk_status: 'Green',
+      passport_eligibility: 'Not Eligible',
+      passport_issued: false,
+      portfolio_status: 'Not Started',
+      capstone_status: 'Not Started',
+      onboarding_complete: false,
+      passport_id: passportId,
+      current_job_role: form.current_job_role || null,
+      career_goal: form.career_goal || null,
+      linkedin_url: form.linkedin_url || null,
+    }).select().single();
+
+    if (insertError) {
+      if (insertError.code === '23505') {
+        setError('A learner with this email already exists.');
+      } else {
+        setError(`Failed to add learner: ${insertError.message}`);
+      }
       setSaving(false);
       return;
     }
 
-    setSuccess(`${form.first_name} ${form.last_name} added successfully.`);
+    // Seed capability scores
+    if (learner) {
+      await db.from('capability_scores').insert(
+        CAPABILITY_AREAS.map(cap => ({
+          learner_id: learner.id, capability: cap, level: 'Not Started', score: 0,
+        }))
+      ).select();
+    }
+
+    setSuccess(`${form.first_name} ${form.last_name} added successfully. Passport ID: ${passportId}`);
     setSaving(false);
 
     setTimeout(() => router.push('/admin/learners'), 1500);
@@ -109,6 +150,7 @@ export default function AddLearnerPage() {
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Pathway *</label>
             <select className="form-input" value={form.pathway} onChange={e => f('pathway', e.target.value)}>
+              <option value="">— Select pathway —</option>
               <option value="PM">Product Management (PM)</option>
               <option value="BA">Business Analysis (BA)</option>
             </select>
@@ -138,7 +180,7 @@ export default function AddLearnerPage() {
       <div style={{ padding: '16px 20px', background: 'rgba(197,116,58,0.07)', border: '1px solid rgba(197,116,58,0.2)', borderRadius: 6, margin: '16px 0' }}>
         <p style={{ fontWeight: 700, color: 'var(--amber-deep)', marginBottom: 4 }}>After adding this learner</p>
         <div style={{ fontSize: '0.875rem', color: 'var(--ink-muted)', lineHeight: 1.7 }}>
-          <p>1. Send them the portal link: <strong>https://app.upthrustdigital.com</strong></p>
+          <p>1. Send them the portal link: <strong>https://upthrust-portal-qj18.vercel.app</strong></p>
           <p>2. They sign up with the same email address above</p>
           <p>3. The Clerk webhook automatically links their account (if webhook is set up)</p>
           <p>4. Or manually: go to Learner Detail → paste their Clerk User ID</p>

@@ -46,6 +46,24 @@ export async function POST(req: Request) {
       }
 
       // ─────────────────────────────────────────────────────────
+      // ADMIN: correct a learner's core enrolment fields
+      // (pathway, tier, enrollment_status). Used to fix mis-set tracks.
+      // ─────────────────────────────────────────────────────────
+      case 'admin_update_learner': {
+        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+        const { learnerId, fields } = body;
+        const allowed: Record<string, any> = {};
+        if (fields.pathway === 'PM' || fields.pathway === 'BA') allowed.pathway = fields.pathway;
+        if (fields.tier) allowed.tier = fields.tier;
+        if (fields.enrollment_status) allowed.enrollment_status = fields.enrollment_status;
+        if (Object.keys(allowed).length === 0)
+          return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+        const { error } = await db.from('learners').update(allowed).eq('id', learnerId);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ success: true });
+      }
+
+      // ─────────────────────────────────────────────────────────
       // PORTFOLIO — add / edit / delete own artefacts
       // ─────────────────────────────────────────────────────────
       case 'portfolio_add': {
@@ -204,8 +222,8 @@ export async function POST(req: Request) {
         if (a?.learner_id) {
           await db.from('notifications').insert({
             learner_id: a.learner_id,
-            type: status === 'Needs Revision' ? 'resubmission_required' : 'feedback_ready',
-            title: status === 'Needs Revision'
+            type: status === 'Resubmission Requested' ? 'resubmission_required' : 'feedback_ready',
+            title: status === 'Resubmission Requested'
               ? `↩ Revision requested — Week ${a.week_number}`
               : `✓ Feedback ready — Week ${a.week_number}`,
             message: feedback || 'Genesis has reviewed your submission.',
@@ -301,53 +319,6 @@ export async function POST(req: Request) {
         const { error } = await db.from('resources').update({ [field]: value }).eq('id', resourceId);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         return NextResponse.json({ success: true });
-      }
-
-      // ─────────────────────────────────────────────────────────
-      // ADMIN: add a new learner + seed capability scores
-      // ─────────────────────────────────────────────────────────
-      case 'add_learner': {
-        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
-        const { learner: l } = body;
-        const { data: created, error } = await db.from('learners').insert({
-          email: l.email.toLowerCase().trim(),
-          first_name: l.first_name.trim(),
-          last_name: l.last_name?.trim() || null,
-          phone: l.phone || null,
-          country: l.country,
-          pathway: l.pathway,
-          tier: l.tier,
-          cohort: 'Cohort 1',
-          enrollment_status: 'Active',
-          attendance_pct: 0,
-          assignment_completion_pct: 0,
-          avg_score: 0,
-          risk_status: 'Green',
-          passport_eligibility: 'Not Eligible',
-          passport_issued: false,
-          portfolio_status: 'Not Started',
-          capstone_status: 'Not Started',
-          onboarding_complete: false,
-          current_job_role: l.current_job_role || null,
-          career_goal: l.career_goal || null,
-          linkedin_url: l.linkedin_url || null,
-        }).select().maybeSingle();
-        if (error) {
-          if (error.code === '23505') return NextResponse.json({ error: 'A learner with this email already exists.' }, { status: 409 });
-          return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-        if (created) {
-          const CAPABILITY_AREAS = [
-            'Product Thinking', 'Business Analysis', 'Discovery & Problem Framing',
-            'Requirements & Documentation', 'Stakeholder Management', 'Delivery & Agile Collaboration',
-            'Communication & Facilitation', 'Strategy & Commercial Thinking',
-            'AI-enabled Professional Practice', 'Portfolio & Career Readiness',
-          ];
-          await db.from('capability_scores').insert(
-            CAPABILITY_AREAS.map(cap => ({ learner_id: created.id, capability: cap, level: 'Not Started', score: 0 }))
-          );
-        }
-        return NextResponse.json({ success: true, learner: created });
       }
 
       default:

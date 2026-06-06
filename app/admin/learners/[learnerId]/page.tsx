@@ -7,7 +7,7 @@ import type { Learner, Assignment, Attendance, CapabilityScore } from '@/lib/typ
 import { RISK_COLOR, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG } from '@/lib/types';
 import Link from 'next/link';
 import ClerkLinkForm from './ClerkLinkForm';
-import PassportControls from '@/components/PassportControls';
+import PathwayEditor from './PathwayEditor';
 
 export default async function LearnerDetailPage({ params }: { params: Promise<{ learnerId: string }> }) {
   const { userId } = await auth();
@@ -71,6 +71,19 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
           <p style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--ink-muted)' }}>{typedLearner.clerk_user_id}</p>
         </div>
       )}
+
+      {/* Pathway not set warning */}
+      {!typedLearner.pathway && (
+        <div style={{ padding: '14px 18px', background: 'rgba(197,116,58,0.08)', border: '1px solid rgba(197,116,58,0.25)', borderRadius: 6, marginBottom: 12, borderLeft: '3px solid var(--amber-deep)' }}>
+          <p style={{ fontWeight: 700, color: 'var(--amber-deep)' }}>⚠ Pathway not set — assign PM or BA below so this learner sees the right track.</p>
+        </div>
+      )}
+
+      {/* Enrolment editor — correct pathway / tier */}
+      <div style={{ padding: '16px 18px', background: 'var(--white)', border: '1px solid var(--paper-line)', borderRadius: 6, marginBottom: 24 }}>
+        <p style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 12 }}>Enrolment</p>
+        <PathwayEditor learnerId={typedLearner.id} currentPathway={typedLearner.pathway} currentTier={typedLearner.tier} />
+      </div>
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 24 }}>
@@ -194,11 +207,22 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
           )}
 
           {/* Passport */}
-          <PassportControls
-            learnerId={typedLearner.id}
-            passportId={typedLearner.passport_id}
-            passportIssued={typedLearner.passport_issued}
-          />
+          <div className="card">
+            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '1rem', fontWeight: 500, marginBottom: 12 }}>Passport Status</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: 8 }}>
+              <span style={{ color: 'var(--ink-muted)' }}>Eligibility</span>
+              <span style={{ fontWeight: 600, color: typedLearner.passport_eligibility === 'Approved' ? 'var(--moss)' : 'var(--ink-muted)' }}>{typedLearner.passport_eligibility || 'Not Eligible'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+              <span style={{ color: 'var(--ink-muted)' }}>Issued</span>
+              <span style={{ fontWeight: 600, color: typedLearner.passport_issued ? 'var(--moss)' : 'var(--ink-muted)' }}>{typedLearner.passport_issued ? 'Yes' : 'No'}</span>
+            </div>
+            {typedLearner.passport_issued && (
+              <a href={`/api/passport-pdf?learnerId=${typedLearner.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm" style={{ marginTop: 12, display: 'block', textAlign: 'center' }}>
+                Preview Passport PDF
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>

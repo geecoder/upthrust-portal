@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@/lib/supabase';
+import { UpthrustLogo } from '@/components/UpthrustLogo';
 
 const STEPS = [
   { id: 'welcome',      sub: 'Your 12-week journey starts here',   title: 'Welcome to Upthrust' },
@@ -176,10 +177,7 @@ export default function OnboardingPage() {
         {/* Logo + progress */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
-              <path d="M4 22 L14 6 L24 22 M9 18 L19 18" stroke="#FAF7F1" strokeWidth="2.2" strokeLinecap="square"/>
-            </svg>
-            <span style={{ fontFamily: 'Fraunces, serif', fontSize: '1.25rem', color: '#FAF7F1', letterSpacing: '-0.02em' }}>Upthrust</span>
+            <UpthrustLogo size={26} wordmarkColor="#FAF7F1" />
           </div>
           <div style={{ height: 2, background: 'rgba(250,247,241,0.1)', borderRadius: 1, margin: '0 auto 8px', width: 320, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${((step + 1) / STEPS.length) * 100}%`, background: 'var(--amber)', borderRadius: 1, transition: 'width 400ms ease' }} />
@@ -245,16 +243,25 @@ export default function OnboardingPage() {
           {/* Step 2 — Pathway & goals */}
           {step === 2 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ padding: '16px 18px', background: 'var(--paper-soft)', borderRadius: 6, borderTop: `3px solid ${pathway === 'BA' ? 'var(--moss)' : 'var(--ink)'}` }}>
-                <p style={{ fontWeight: 700, marginBottom: 6, fontSize: '1rem' }}>
-                  {pathway === 'BA' ? '📊 Business Analysis' : '📋 Product Management'} Pathway
-                </p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--ink-muted)', lineHeight: 1.6 }}>
-                  {pathway === 'BA'
-                    ? 'You will build: BRDs, stakeholder maps, process maps, elicitation interview notes, UAT packs, business cases, and a full capstone.'
-                    : 'You will build: PRDs, product strategy canvases, user journey maps, sprint backlogs, metrics plans, and a full capstone.'}
-                </p>
-              </div>
+              {!pathway ? (
+                <div style={{ padding: '16px 18px', background: 'var(--paper-soft)', borderRadius: 6, borderTop: '3px solid var(--amber-deep)' }}>
+                  <p style={{ fontWeight: 700, marginBottom: 6, fontSize: '1rem' }}>Pathway not set</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--ink-muted)', lineHeight: 1.6 }}>
+                    Your pathway hasn't been assigned yet. Please email info@upthrustdigital.com so we can set this correctly before you continue.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ padding: '16px 18px', background: 'var(--paper-soft)', borderRadius: 6, borderTop: `3px solid ${pathway === 'BA' ? 'var(--moss)' : 'var(--ink)'}` }}>
+                  <p style={{ fontWeight: 700, marginBottom: 6, fontSize: '1rem' }}>
+                    {pathway === 'BA' ? '📊 Business Analysis' : '📋 Product Management'} Pathway
+                  </p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--ink-muted)', lineHeight: 1.6 }}>
+                    {pathway === 'BA'
+                      ? 'You will build: BRDs, stakeholder maps, process maps, elicitation interview notes, UAT packs, business cases, and a full capstone.'
+                      : 'You will build: PRDs, product strategy canvases, user journey maps, sprint backlogs, metrics plans, and a full capstone.'}
+                  </p>
+                </div>
+              )}
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">What is your main career goal from this program?</label>
                 <textarea className="form-input form-textarea" style={{ minHeight: 90 }}

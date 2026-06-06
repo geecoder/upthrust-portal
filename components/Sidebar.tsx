@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@/lib/supabase';
+import { UpthrustLogo } from './UpthrustLogo';
 
 const LEARNER_NAV = [
   { href: '/portal', label: 'Dashboard', icon: '◈', exact: true },
@@ -123,12 +124,7 @@ export default function Sidebar({ learnerName, learnerId, pathway, tier, isAdmin
       {/* Logo */}
       <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid rgba(250,247,241,0.08)' }}>
         <Link href="/portal" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
-          <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
-            <path d="M4 22 L14 6 L24 22 M9 18 L19 18" stroke="#FAF7F1" strokeWidth="2.2" strokeLinecap="square"/>
-          </svg>
-          <span style={{ fontFamily: 'Fraunces, serif', fontSize: '1.0625rem', fontWeight: 400, color: '#FAF7F1', letterSpacing: '-0.02em' }}>
-            Upthrust
-          </span>
+          <UpthrustLogo size={22} wordmarkColor="#FAF7F1" />
         </Link>
         {(pathway || tier) && (
           <div style={{ marginTop: 8, display: 'flex', gap: 5, flexWrap: 'wrap' }}>

@@ -54,7 +54,7 @@ const STATUS_COLOR: Record<string, string> = {
   'Submitted':                '#1D4ED8',
   'AI Reviewed':              '#7C3AED',
   'Human Reviewed':           '#1D4ED8',
-  'Needs Revision':   'var(--red)',
+  'Resubmission Requested':   'var(--red)',
   'Approved':                 'var(--moss)',
   'Portfolio Ready':          '#047857',
 };
@@ -64,7 +64,7 @@ const STATUS_BG: Record<string, string> = {
   'Submitted':                'rgba(37,99,235,0.08)',
   'AI Reviewed':              'rgba(124,58,237,0.08)',
   'Human Reviewed':           'rgba(29,78,216,0.08)',
-  'Needs Revision':   'rgba(179,56,44,0.08)',
+  'Resubmission Requested':   'rgba(179,56,44,0.08)',
   'Approved':                 'rgba(5,150,105,0.08)',
   'Portfolio Ready':          'rgba(4,120,87,0.1)',
 };
@@ -103,9 +103,27 @@ export default async function AssignmentsPage() {
     );
   }
 
-  const pathway = learner.pathway === 'BA' ? 'BA' : 'PM';
+  // Pathway must be explicitly set — never silently default to PM
+  if (learner.pathway !== 'PM' && learner.pathway !== 'BA') {
+    return (
+      <div className="portal-content">
+        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--white)', borderRadius: 8, border: '1px solid var(--paper-line)' }}>
+          <p style={{ fontSize: '2rem', marginBottom: 12 }}>🧭</p>
+          <p style={{ fontFamily: 'Fraunces, serif', fontSize: '1.25rem', marginBottom: 8 }}>
+            Your pathway isn't set yet
+          </p>
+          <p style={{ color: 'var(--ink-muted)', lineHeight: 1.6 }}>
+            We need to assign you to the PM or BA track before your assignments appear. Email{' '}
+            <a href="mailto:info@upthrustdigital.com" style={{ color: 'var(--amber-deep)', fontWeight: 600 }}>
+              info@upthrustdigital.com
+            </a>{' '}and we'll set it right away.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  // Load weeks (admin client — bypasses RLS completely)
+  const pathway = learner.pathway === 'BA' ? 'BA' : 'PM';
   const { data: weeksRaw, error: weeksError } = await db
     .from('weeks')
     .select('*')
@@ -126,7 +144,7 @@ export default async function AssignmentsPage() {
   const submitted     = assignments.filter(a => a.status !== 'Not Started').length;
   const approved      = assignments.filter(a => a.status === 'Approved' || a.status === 'Portfolio Ready' || a.portfolio_approved).length;
   const pendingFb     = assignments.filter(a => a.status === 'Submitted' || a.status === 'AI Reviewed').length;
-  const needsResub    = assignments.filter(a => a.status === 'Needs Revision').length;
+  const needsResub    = assignments.filter(a => a.status === 'Resubmission Requested').length;
 
   function getAssignment(weekNum: number): Assignment | undefined {
     return assignments.find(a => a.week_number === weekNum && a.pathway === pathway);
@@ -297,7 +315,7 @@ export default async function AssignmentsPage() {
                     <p style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', lineHeight: 1.7, fontStyle: 'italic' }}>
                       "{myAssign.feedback}"
                     </p>
-                    {myAssign.status === 'Needs Revision' && (
+                    {myAssign.status === 'Resubmission Requested' && (
                       <p style={{ fontSize: '0.8125rem', color: 'var(--red)', fontWeight: 600, marginTop: 10 }}>
                         ↩ Revision required — read the feedback above and use the resubmit button below.
                       </p>

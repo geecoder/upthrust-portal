@@ -33,7 +33,7 @@ export default function AssignmentSubmitPanel({
   const [urlError, setUrlError] = useState('');
   const [aiFeedback, setAiFeedback] = useState('');
 
-  const isResubmission = existingAssignment?.status === 'Needs Revision';
+  const isResubmission = existingAssignment?.status === 'Resubmission Requested';
   const hasSubmitted = !!existingAssignment?.submission_url;
 
   function validateUrl(val: string) {

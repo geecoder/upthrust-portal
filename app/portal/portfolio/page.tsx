@@ -8,33 +8,33 @@ import type { PortfolioItem, Assignment } from '@/lib/types';
 import Link from 'next/link';
 
 const REQUIRED_ARTEFACTS_PM = [
-  { title: 'Product Teardown Report', week: 1, type: 'Product Teardown' },
-  { title: 'Problem Brief', week: 2, type: 'Problem Brief' },
-  { title: 'Product Strategy Canvas', week: 3, type: 'Strategy Canvas' },
-  { title: 'Full PRD', week: 4, type: 'PRD' },
-  { title: 'User Journey Map', week: 5, type: 'Journey Map' },
-  { title: 'Design Brief', week: 6, type: 'Design Brief' },
-  { title: 'Figma Prototype Review', week: 7, type: 'Design Review' },
-  { title: 'Sprint Backlog', week: 8, type: 'Sprint Backlog' },
-  { title: 'Stakeholder Simulation Responses', week: 9, type: 'Stakeholder Sim' },
-  { title: 'Launch Plan', week: 10, type: 'Launch Plan' },
-  { title: 'Metrics Plan', week: 11, type: 'Metrics Plan' },
-  { title: 'Capstone Project', week: 12, type: 'Capstone' },
+  { title: 'Discovery & Stakeholder Pack (Fintech Sim)', week: 1, type: 'Discovery Pack' },
+  { title: 'Transfer Failure Investigation Pack', week: 2, type: 'Investigation Pack' },
+  { title: 'Customer & Market Research Pack', week: 3, type: 'Research Pack' },
+  { title: 'Product Strategy', week: 4, type: 'Strategy' },
+  { title: 'Execution & Delivery Pack', week: 5, type: 'Execution Pack' },
+  { title: 'UX Collaboration Pack', week: 6, type: 'UX Pack' },
+  { title: 'Analytics & Growth Pack', week: 7, type: 'Analytics Pack' },
+  { title: 'Executive Communication Pack', week: 8, type: 'Comms Pack' },
+  { title: 'Capstone Kickoff (Sendr)', week: 9, type: 'Capstone Kickoff' },
+  { title: 'Capstone Build', week: 10, type: 'Capstone Build' },
+  { title: 'Capstone Refinement + Case Study', week: 11, type: 'Case Study' },
+  { title: 'Capstone Final Presentation', week: 12, type: 'Capstone' },
 ];
 
 const REQUIRED_ARTEFACTS_BA = [
-  { title: 'Stakeholder Map & RACI Matrix', week: 1, type: 'Stakeholder Map' },
-  { title: 'Elicitation Interview Notes', week: 2, type: 'Elicitation Notes' },
-  { title: 'Business Case', week: 3, type: 'Business Case' },
-  { title: 'Full BRD', week: 4, type: 'BRD' },
-  { title: 'As-Is / To-Be Process Maps', week: 5, type: 'Process Map' },
-  { title: 'User Journey vs Process Gap Analysis', week: 6, type: 'Gap Analysis' },
-  { title: 'BA Design Review', week: 7, type: 'Design Review' },
-  { title: 'User Stories + Acceptance Criteria Library', week: 8, type: 'User Stories' },
-  { title: 'Stakeholder Workshop Pack', week: 9, type: 'Workshop Pack' },
-  { title: 'Full UAT Pack', week: 10, type: 'UAT Pack' },
-  { title: 'Post-Launch Reporting Framework', week: 11, type: 'Reporting Framework' },
-  { title: 'Capstone Project', week: 12, type: 'Capstone' },
+  { title: 'Discovery & Stakeholder Pack (Fintech Sim)', week: 1, type: 'Discovery Pack' },
+  { title: 'Transfer Failure Investigation Pack', week: 2, type: 'Investigation Pack' },
+  { title: 'Requirements Fundamentals Pack', week: 3, type: 'Requirements Pack' },
+  { title: 'Stakeholder Management & Facilitation Pack', week: 4, type: 'Facilitation Pack' },
+  { title: 'As-Is / To-Be Process Analysis', week: 5, type: 'Process Map' },
+  { title: 'Agile Delivery Support Pack', week: 6, type: 'Agile Pack' },
+  { title: 'Beneficiary Management Requirements Pack', week: 7, type: 'Requirements Pack' },
+  { title: 'Onboarding Data Analysis Pack', week: 8, type: 'Analysis Pack' },
+  { title: 'Capstone Kickoff (Onbara Bank)', week: 9, type: 'Capstone Kickoff' },
+  { title: 'Capstone Build', week: 10, type: 'Capstone Build' },
+  { title: 'Capstone Refinement + Case Study', week: 11, type: 'Case Study' },
+  { title: 'Capstone Final Presentation', week: 12, type: 'Capstone' },
 ];
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
@@ -114,8 +114,8 @@ export default function PortfolioPage() {
     setAdding(false); setEditingItem(null); setSaving(false);
   }
 
-  const pathway = learner?.pathway || 'PM';
-  const requiredArtefacts = pathway === 'PM' ? REQUIRED_ARTEFACTS_PM : REQUIRED_ARTEFACTS_BA;
+  const pathway = learner?.pathway === 'BA' ? 'BA' : 'PM';
+  const requiredArtefacts = pathway === 'BA' ? REQUIRED_ARTEFACTS_BA : REQUIRED_ARTEFACTS_PM;
   const approvedItems = items.filter(i => i.status === 'Approved' || i.status === 'Featured');
   const passportProgress = Math.round((approvedItems.length / 8) * 100);
 
@@ -181,9 +181,9 @@ export default function PortfolioPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {requiredArtefacts.map(req => {
             const match = getItemForWeek(req.week);
-            const status: string = match ? (match as any).status : 'Not Started';
+            const status = match ? match.status : 'Not Started';
             const isApproved = status === 'Approved' || status === 'Portfolio Ready' || status === 'Featured';
-            const url = match ? ((match as any).url || (match as any).submission_url || null) : null;
+            const url = match ? ((match as Assignment).submission_url ?? (match as PortfolioItem).url) : null;
 
             return (
               <div key={req.week} className="card" style={{

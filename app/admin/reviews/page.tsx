@@ -37,11 +37,11 @@ export default function AdminReviewsPage() {
 
   const filtered = assignments.filter(a => {
     if (filter === 'pending') return a.status === 'Submitted' || a.status === 'AI Reviewed';
-    if (filter === 'resubmission') return a.status === 'Needs Revision';
+    if (filter === 'resubmission') return a.status === 'Resubmission Requested';
     return a.status !== 'Not Started';
   });
 
-  async function submitFeedback(status: 'Human Reviewed' | 'Needs Revision' | 'Approved' | 'Portfolio Ready') {
+  async function submitFeedback(status: 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Portfolio Ready') {
     if (!selected) return;
     setSaving(true);
     const res = await fetch('/api/admin/data', {
@@ -63,7 +63,7 @@ export default function AdminReviewsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: status === 'Needs Revision' ? 'resubmission_required' : 'feedback_ready',
+          type: status === 'Resubmission Requested' ? 'resubmission_required' : 'feedback_ready',
           learnerId: selected.learner_id,
           assignmentId: selected.id,
         }),
@@ -121,7 +121,7 @@ export default function AdminReviewsPage() {
                 {label}
                 <span style={{ marginLeft: 5, fontSize: '0.6875rem', fontWeight: 700, color: filter === val ? 'var(--amber-deep)' : 'var(--ink-muted)' }}>
                   ({val === 'pending' ? assignments.filter(a => a.status === 'Submitted' || a.status === 'AI Reviewed').length
-                    : val === 'resubmission' ? assignments.filter(a => a.status === 'Needs Revision').length
+                    : val === 'resubmission' ? assignments.filter(a => a.status === 'Resubmission Requested').length
                     : assignments.filter(a => a.status !== 'Not Started').length})
                 </span>
               </button>
@@ -144,11 +144,10 @@ export default function AdminReviewsPage() {
                 <button key={a.id} onClick={() => { setSelected(a); setFeedback(a.feedback || ''); setScore(a.score?.toString() || ''); setSaved(false); }}
                   style={{
                     display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px',
-                    cursor: 'pointer',
+                    borderBottom: '1px solid var(--paper-line)', cursor: 'pointer',
                     background: isSelected ? 'var(--paper-soft)' : overdue ? 'rgba(220,38,38,0.03)' : 'transparent',
-                    border: 'none',
-                    borderBottom: '1px solid var(--paper-line)',
                     borderLeft: isSelected ? '3px solid var(--ink)' : `3px solid ${overdue ? 'var(--red)' : 'transparent'}`,
+                    border: 'none',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -286,7 +285,7 @@ export default function AdminReviewsPage() {
                   className="btn btn-primary" style={{ background: 'var(--amber-deep)' }}>
                   ⭐ Approve + Portfolio Ready
                 </button>
-                <button onClick={() => submitFeedback('Needs Revision')} disabled={!feedback || saving}
+                <button onClick={() => submitFeedback('Resubmission Requested')} disabled={!feedback || saving}
                   className="btn btn-outline">
                   ↩ Request Resubmission
                 </button>

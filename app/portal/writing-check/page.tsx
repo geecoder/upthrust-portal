@@ -16,6 +16,7 @@ export default function WritingCheckPage() {
   const [wordCount, setWordCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<{ docType: string; score: number; timestamp: string }[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -27,19 +28,29 @@ export default function WritingCheckPage() {
     if (!text.trim() || text.trim().split(/\s+/).length < 30) return;
     setLoading(true);
     setResult('');
+    setErrorMsg('');
 
-    const res = await fetch('/api/writing-check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, documentType: docType, pathway: learner?.pathway || 'PM' })
-    });
-    const data = await res.json();
-    setResult(data.result || '');
-    setWordCount(data.wordCount || 0);
+    try {
+      const res = await fetch('/api/writing-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, documentType: docType, pathway: learner?.pathway || 'PM' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.result) {
+        setErrorMsg(data.error || 'The writing checker could not process this right now. Please try again in a moment.');
+        setLoading(false);
+        return;
+      }
+      setResult(data.result);
+      setWordCount(data.wordCount || 0);
 
-    const scoreMatch = data.result?.match(/Score:\s*(\d+)\/10/);
-    if (scoreMatch) {
-      setHistory(h => [{ docType, score: parseInt(scoreMatch[1]), timestamp: new Date().toLocaleTimeString() }, ...h].slice(0, 5));
+      const scoreMatch = data.result?.match(/Score:\s*(\d+)\/10/);
+      if (scoreMatch) {
+        setHistory(h => [{ docType, score: parseInt(scoreMatch[1]), timestamp: new Date().toLocaleTimeString() }, ...h].slice(0, 5));
+      }
+    } catch {
+      setErrorMsg('Network error. Check your connection and try again.');
     }
     setLoading(false);
   }
@@ -137,6 +148,11 @@ export default function WritingCheckPage() {
                 </button>
               </div>
             </div>
+            {errorMsg && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--red, #C0392B)', marginTop: 12, fontWeight: 600 }}>
+                ⚠ {errorMsg}
+              </p>
+            )}
           </div>
 
           {/* Tips */}
