@@ -34,7 +34,7 @@ export default function WritingCheckPage() {
       const res = await fetch('/api/writing-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, documentType: docType, pathway: learner?.pathway || 'PM' })
+        body: JSON.stringify({ text, documentType: docType, pathway: learner?.pathway === 'BA' ? 'BA' : 'PM' })
       });
       const data = await res.json();
       if (!res.ok || !data.result) {

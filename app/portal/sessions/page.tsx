@@ -46,8 +46,17 @@ export default async function SessionsPage() {
 
   const typedWeeks = (weeks || []) as Week[];
   const typedAttendance = (attendance || []) as Attendance[];
+  // Only treat a value as a usable link if it is an absolute http(s) URL.
+  // Guards against legacy data where a full Zoom invite blob was stored.
+  const safeUrl = (v: string | null | undefined): string => {
+    if (!v) return '';
+    const t = String(v).trim();
+    if (/^https?:\/\/\S+$/i.test(t)) return t;
+    const m = t.match(/https?:\/\/[^\s<>"')]+/i);
+    return m ? m[0] : '';
+  };
   // Use Week 0's zoom link as the global recurring zoom link
-  const globalZoomLink = zoomConfig?.zoom_link || '';
+  const globalZoomLink = safeUrl(zoomConfig?.zoom_link);
 
   function getAttendance(weekNum: number) {
     return typedAttendance.find(a => a.week_number === weekNum);
@@ -117,10 +126,10 @@ export default async function SessionsPage() {
           const dueDate = pathway === 'PM' ? week.pm_due_date : week.ba_due_date;
           // Only show recording if past AND recording URL exists
           const scheduled = sessionsByWeek.get(week.week_number);
-          const showRecording = isPast && !!(scheduled?.recording_url || week.recording_url);
-          const recordingUrl = scheduled?.recording_url || week.recording_url;
+          const recordingUrl = safeUrl(scheduled?.recording_url || week.recording_url);
+          const showRecording = isPast && !!recordingUrl;
           // Only show Join button if current week AND zoom link exists
-          const zoomLink = scheduled?.zoom_link || week.zoom_link || globalZoomLink;
+          const zoomLink = safeUrl(scheduled?.zoom_link) || safeUrl(week.zoom_link) || globalZoomLink;
 
           return (
             <div key={week.week_number} className="card" style={{

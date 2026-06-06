@@ -13,6 +13,21 @@ import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
+// Pull the first absolute http(s) URL out of an arbitrary string.
+// Zoom invites are often pasted as a full blob ("X is inviting you to a
+// scheduled Zoom meeting... https://zoom.us/j/123..."). We store only the URL.
+function extractUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const text = String(raw).trim();
+  // If it's already a clean absolute URL, keep it.
+  if (/^https?:\/\/\S+$/i.test(text)) return text;
+  // Otherwise find the first URL inside the text.
+  const match = text.match(/https?:\/\/[^\s<>"')]+/i);
+  if (match) return match[0];
+  // No URL found — return null so we never store a non-URL as a link.
+  return null;
+}
+
 async function getLearner(db: any, clerkUserId: string) {
   const { data } = await db.from('learners').select('*').eq('clerk_user_id', clerkUserId).maybeSingle();
   return data;
@@ -239,12 +254,16 @@ export async function POST(req: Request) {
       case 'save_session': {
         if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
         const { session } = body;
+        // Extract a clean absolute URL from whatever was pasted (full Zoom
+        // invite blobs are common). Falls back to the raw value if no URL found.
+        const cleanZoom = extractUrl(session.zoom_link);
+        const cleanRecording = extractUrl(session.recording_url);
         if (session.id) {
           const { error } = await db.from('sessions').update({
             title: session.title, week_number: session.week_number,
             session_date: session.session_date, start_time: session.start_time,
-            zoom_link: session.zoom_link, description: session.description || null,
-            recording_url: session.recording_url || null,
+            zoom_link: cleanZoom, description: session.description || null,
+            recording_url: cleanRecording || null,
           }).eq('id', session.id);
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, id: session.id });
@@ -252,8 +271,8 @@ export async function POST(req: Request) {
           const { data, error } = await db.from('sessions').insert({
             title: session.title, week_number: session.week_number,
             session_date: session.session_date, start_time: session.start_time,
-            zoom_link: session.zoom_link, description: session.description || null,
-            recording_url: session.recording_url || null,
+            zoom_link: cleanZoom, description: session.description || null,
+            recording_url: cleanRecording || null,
           }).select('id').maybeSingle();
           if (error) return NextResponse.json({ error: error.message }, { status: 500 });
           return NextResponse.json({ success: true, id: data?.id });

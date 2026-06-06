@@ -53,12 +53,18 @@ export default function InterviewPage() {
     if (!selected || !answer.trim() || !learner) return;
     setLoading(true);
     setErrorMsg('');
+    // Derive pathway from the QUESTION being answered, not the learner record.
+    // Question IDs are prefixed 'pm-' or 'ba-'; this guarantees the API loads
+    // the same bank the question came from (prevents "Question not found" 404s).
+    const questionPathway = selected.id.startsWith('ba-') ? 'BA'
+      : selected.id.startsWith('pm-') ? 'PM'
+      : (learner.pathway === 'BA' ? 'BA' : 'PM');
     try {
       const res = await fetch('/api/interview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pathway: learner.pathway,
+          pathway: questionPathway,
           questionId: selected.id,
           userAnswer: answer,
           mode: 'evaluate'
@@ -90,8 +96,25 @@ export default function InterviewPage() {
     if (next) selectQuestion(next);
   }
 
-  const pathway = learner?.pathway || 'PM';
+  const pathway = learner?.pathway === 'BA' ? 'BA' : learner?.pathway === 'PM' ? 'PM' : null;
   const filtered = category === 'all' ? questions : questions.filter(q => q.category === category);
+
+  // Wait until we know the learner's pathway before showing PM/BA-specific
+  // content — prevents a BA learner from briefly seeing PM questions.
+  if (learner && !pathway) {
+    return (
+      <div className="portal-content">
+        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--white)', borderRadius: 8, border: '1px solid var(--paper-line)' }}>
+          <p style={{ fontSize: '2rem', marginBottom: 12 }}>🧭</p>
+          <p style={{ fontFamily: 'Fraunces, serif', fontSize: '1.25rem', marginBottom: 8 }}>Your pathway isn't set yet</p>
+          <p style={{ color: 'var(--ink-muted)', lineHeight: 1.6 }}>
+            We need to assign you to the PM or BA track before the Interview Coach can load the right questions. Email{' '}
+            <a href="mailto:info@upthrustdigital.com" style={{ color: 'var(--amber-deep)', fontWeight: 600 }}>info@upthrustdigital.com</a>.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="portal-content">
@@ -99,7 +122,7 @@ export default function InterviewPage() {
         <p style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>AI Practice Lab</p>
         <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.75rem', fontWeight: 400, letterSpacing: '-0.02em' }}>Interview Coach</h1>
         <p style={{ color: 'var(--ink-muted)', marginTop: 6, lineHeight: 1.6 }}>
-          Practise real {pathway} interview questions and get scored feedback with model answers. Based on what actual hiring managers assess for.
+          Practise real {pathway || ''} interview questions and get scored feedback with model answers. Based on what actual hiring managers assess for.
         </p>
       </div>
 
@@ -111,7 +134,7 @@ export default function InterviewPage() {
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--paper-line)' }}>
             <p style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 10 }}>Filter by type</p>
             {['all', 'Behavioural', 'Technical', 'Commercial'].map(cat => (
-              <button key={cat} onClick={() => { setCategory(cat); loadQuestions(pathway, cat === 'all' ? 'all' : cat.toLowerCase()); }}
+              <button key={cat} onClick={() => { setCategory(cat); loadQuestions(pathway!, cat === 'all' ? 'all' : cat.toLowerCase()); }}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left',
                   padding: '7px 10px', borderRadius: 4, marginBottom: 2,

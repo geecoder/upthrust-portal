@@ -20,6 +20,16 @@ const EMPTY: Omit<Session, 'id'> & { id?: string } = {
   zoom_link: '', description: '', recording_url: '',
 };
 
+// Pull the first absolute http(s) URL out of a string (handles full Zoom
+// invite blobs pasted into the link field).
+function extractZoomUrl(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const t = String(raw).trim();
+  if (/^https?:\/\/\S+$/i.test(t)) return t;
+  const m = t.match(/https?:\/\/[^\s<>"')]+/i);
+  return m ? m[0] : '';
+}
+
 export default function AdminSessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +64,7 @@ export default function AdminSessionsPage() {
 
   async function handleSave() {
     if (!form.title.trim()) { setMsg('Title is required.'); return; }
-    if (!form.zoom_link.trim()) { setMsg('Zoom link is required.'); return; }
+    if (!extractZoomUrl(form.zoom_link)) { setMsg('Please include a valid Zoom link (https://...). You can paste the full invite — we will pick out the link.'); return; }
     setSaving(true);
     setMsg('');
     const res = await fetch('/api/admin/data', {
@@ -125,8 +135,8 @@ export default function AdminSessionsPage() {
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                {s.zoom_link && (
-                  <a href={s.zoom_link} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline">Open Zoom</a>
+                {s.zoom_link && extractZoomUrl(s.zoom_link) && (
+                  <a href={extractZoomUrl(s.zoom_link)} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline">Open Zoom</a>
                 )}
                 <button onClick={() => openEdit(s)} className="btn btn-sm btn-ghost">Edit</button>
                 <button onClick={() => deleteSession(s)} className="btn btn-sm btn-ghost" style={{ color: 'var(--red)' }}>Delete</button>
@@ -169,7 +179,10 @@ export default function AdminSessionsPage() {
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Zoom Link *</label>
-                <input className="form-input" type="url" value={form.zoom_link} onChange={e => setForm({ ...form, zoom_link: e.target.value })} placeholder="https://zoom.us/j/..." />
+                <input className="form-input" type="text" value={form.zoom_link} onChange={e => setForm({ ...form, zoom_link: e.target.value })} placeholder="https://zoom.us/j/... (or paste the full invite)" />
+                <p style={{ fontSize: '0.6875rem', color: 'var(--ink-muted)', marginTop: 4 }}>
+                  Tip: you can paste the full Zoom invitation — we'll automatically pick out just the meeting link.
+                </p>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Description <span style={{ fontWeight: 400, color: 'var(--ink-muted)' }}>(optional)</span></label>
