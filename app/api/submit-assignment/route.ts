@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
+import { MODEL_HAIKU } from '@/lib/ai-models';
 
 const FEEDBACK_PROMPTS: Record<string, string> = {
   'Product Teardown': `You are a senior product leader reviewing a learner's product teardown. The learner cannot see their submission from your view — you are coaching them based on the assignment context.
@@ -248,7 +249,7 @@ Since you cannot access the link, provide guidance based on what the assignment 
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001', // Faster + cheaper for auto-feedback
+        model: MODEL_HAIKU,
         max_tokens: 500,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],

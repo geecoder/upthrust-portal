@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { MODEL_SONNET } from '@/lib/ai-models';
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -69,7 +70,7 @@ Please review this text for writing quality and professional presentation.`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: MODEL_SONNET,
       max_tokens: 700,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }]

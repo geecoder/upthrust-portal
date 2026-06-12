@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
+import { MODEL_SONNET } from '@/lib/ai-models';
 
 // AI feedback prompts per assignment type
 const FEEDBACK_PROMPTS: Record<string, string> = {
@@ -145,7 +146,7 @@ Provide constructive, specific feedback that will help this learner improve thei
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: MODEL_SONNET,
         max_tokens: 600,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],

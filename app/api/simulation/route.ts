@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { MODEL_SONNET } from '@/lib/ai-models';
 
 // ── CHARACTER DEFINITIONS ─────────────────────────────────────────────────────
 // Each character is grounded in a realistic African/UK fintech/product context
@@ -347,7 +348,7 @@ export async function POST(req: Request) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: MODEL_SONNET,
         max_tokens: 1000,
         system: character.debriefPrompt,
         messages: [{
@@ -387,7 +388,7 @@ export async function POST(req: Request) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: MODEL_SONNET,
       max_tokens: 400,
       system: systemPrompt,
       messages: claudeMessages
