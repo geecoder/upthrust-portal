@@ -26,6 +26,7 @@ export default function InterviewPage() {
   const [showModel, setShowModel] = useState(false);
   const [history, setHistory] = useState<{ question: string; score: number }[]>([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -37,9 +38,14 @@ export default function InterviewPage() {
   }, [user]);
 
   function loadQuestions(pathway: string, cat: string) {
+    setLoadError('');
     fetch(`/api/interview?pathway=${pathway}&category=${cat}`)
       .then(r => r.json())
-      .then(d => setQuestions(d.questions || []));
+      .then(d => {
+        if (d.error) { setLoadError('Could not load questions. Please refresh.'); setQuestions([]); }
+        else setQuestions(d.questions || []);
+      })
+      .catch(() => setLoadError('Network error loading questions. Please refresh.'));
   }
 
   function selectQuestion(q: Question) {
@@ -47,6 +53,7 @@ export default function InterviewPage() {
     setAnswer('');
     setResult(null);
     setShowModel(false);
+    setErrorMsg('');
   }
 
   async function submitAnswer() {
@@ -134,7 +141,7 @@ export default function InterviewPage() {
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--paper-line)' }}>
             <p style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 10 }}>Filter by type</p>
             {['all', 'Behavioural', 'Technical', 'Commercial'].map(cat => (
-              <button key={cat} onClick={() => { setCategory(cat); loadQuestions(pathway!, cat === 'all' ? 'all' : cat.toLowerCase()); }}
+              <button key={cat} onClick={() => { setCategory(cat); setSelected(null); setAnswer(''); setResult(null); setShowModel(false); loadQuestions(pathway!, cat === 'all' ? 'all' : cat.toLowerCase()); }}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left',
                   padding: '7px 10px', borderRadius: 4, marginBottom: 2,
@@ -150,6 +157,11 @@ export default function InterviewPage() {
 
           {/* Question list */}
           <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {loadError && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--red, #C0392B)', padding: '12px 16px', fontWeight: 600 }}>
+                ⚠ {loadError}
+              </p>
+            )}
             {filtered.map(q => (
               <button key={q.id} onClick={() => selectQuestion(q)} style={{
                 display: 'block', width: '100%', textAlign: 'left',

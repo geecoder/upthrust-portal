@@ -229,9 +229,17 @@ Please evaluate this answer now.`;
       })
     });
 
-    if (!response.ok) { const e = await response.text(); console.error('[interview] Anthropic error:', response.status, e); return NextResponse.json({ error: 'AI service error. Please try again.' }, { status: 502 }); }
-  const data = await response.json();
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[interview] Anthropic error:', response.status, errText);
+      return NextResponse.json({ error: 'AI service error. Please try again.', detail: errText }, { status: 502 });
+    }
+    const data = await response.json();
     const evaluation = data.content?.[0]?.text || '';
+    if (!evaluation) {
+      console.error('[interview] Empty evaluation from Anthropic:', JSON.stringify(data));
+      return NextResponse.json({ error: 'AI service error. Please try again.' }, { status: 502 });
+    }
     const modelAnswer = question.modelAnswer;
 
     return NextResponse.json({ evaluation, modelAnswer });
