@@ -60,23 +60,6 @@ function NotValid({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-function Badge({ children, tone }: { children: React.ReactNode; tone: 'adv' | 'pro' | 'dev' | 'fnd' }) {
-  const map = {
-    adv: { bg: NAVY, fg: '#fff' },
-    pro: { bg: '#DCE6F4', fg: '#2C5FA0' },
-    dev: { bg: '#FBEFD6', fg: '#9A6E12' },
-    fnd: { bg: '#ECEEF1', fg: '#7A828E' },
-  }[tone];
-  return <span style={{ background: map.bg, color: map.fg, fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 5 }}>{children}</span>;
-}
-
-function toneFor(level: string): 'adv' | 'pro' | 'dev' | 'fnd' {
-  if (/advanced/i.test(level)) return 'adv';
-  if (/proficient/i.test(level)) return 'pro';
-  if (/developing/i.test(level)) return 'dev';
-  return 'fnd';
-}
-
 export default async function VerifyPage({
   params,
   searchParams,
@@ -87,10 +70,17 @@ export default async function VerifyPage({
   const { passportId } = await params;
   const { sig } = await searchParams;
 
+  // This page is PUBLIC (middleware.ts). Select only the columns it needs, so a
+  // future edit cannot accidentally render something that was merely in scope.
+  //   rendered:            full_name, pathway, cohort, issued_at, passport_id
+  //   read but NOT shown:  learner_id, overall_score, signature — required to
+  //                        recompute the HMAC over the canonical payload
+  // Deliberately not selected: country, rating, readiness_level,
+  //   capability_breakdown, evidence, facilitator_note, portfolio_url.
   const db = createAdminClient();
   const { data: p } = await db
     .from('passports')
-    .select('*')
+    .select('passport_id, learner_id, full_name, pathway, cohort, overall_score, issued_at, signature, status')
     .eq('passport_id', passportId)
     .order('issued_at', { ascending: false })
     .limit(1)
@@ -124,8 +114,6 @@ export default async function VerifyPage({
   const storedSigValid = verifySignature(signable, p.signature);
   const cryptoVerified = sigParamValid || storedSigValid;
 
-  const breakdown: { domain: string; score: number; level: string }[] = Array.isArray(p.capability_breakdown) ? p.capability_breakdown : [];
-  const evidence: { title: string; score: number; reviewer: string }[] = Array.isArray(p.evidence) ? p.evidence : [];
   const issuedDate = new Date(p.issued_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
@@ -148,67 +136,42 @@ export default async function VerifyPage({
           </div>
         </div>
 
-        {/* Identity */}
+        {/* Identity.
+            This page is public and unauthenticated, so it shows only what
+            verifying a credential requires: who it belongs to, which programme
+            and cohort, when it was issued, its id, and whether the signature
+            checks out. No score, no per-domain breakdown, no assignment
+            evidence, no reviewer names, no country, no portfolio link, no
+            facilitator free text. Anyone who needs the detail should be sent
+            the portfolio directly by the holder. */}
         <div style={{ padding: '28px 28px 8px' }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: MUTE, textTransform: 'uppercase' }}>Verified Learner</div>
           <h1 style={{ fontSize: 28, margin: '6px 0 2px', fontFamily: 'Georgia, serif' }}>{p.full_name}</h1>
           <div style={{ color: MUTE, fontSize: 14 }}>
-            {p.pathway}{p.country ? ` · ${p.country}` : ''} · {p.cohort}
+            {p.pathway} · {p.cohort}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginTop: 20 }}>
-            <Stat label="Overall Capability" value={`${p.overall_score}/100`} sub={p.rating} />
-            <Stat label="Readiness Level" value={p.readiness_level} />
+            <Stat label="Programme" value={p.pathway} />
+            <Stat label="Cohort" value={p.cohort} />
             <Stat label="Credential ID" value={p.passport_id} mono />
             <Stat label="Date Issued" value={issuedDate} />
           </div>
         </div>
 
-        {/* Capability breakdown */}
-        {breakdown.length > 0 && (
-          <Section title="Capability Framework">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0 }}>
-              {breakdown.map((b) => (
-                <div key={b.domain} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid #F0ECE4' }}>
-                  <span style={{ fontSize: 14 }}>{b.domain}</span>
-                  <Badge tone={toneFor(b.level)}>{b.level}</Badge>
-                </div>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {/* Evidence portfolio */}
-        {evidence.length > 0 && (
-          <Section title="Evidence Portfolio">
-            {evidence.map((e, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid #F0ECE4' }}>
-                <span style={{ fontSize: 14 }}>{e.title}</span>
-                <span style={{ fontSize: 13, color: MUTE }}><strong style={{ color: INK }}>{e.score}</strong>/100 · {e.reviewer}</span>
-              </div>
-            ))}
-          </Section>
-        )}
-
-        {/* Facilitator validation */}
-        <Section title="Mentor Validation">
+        {/* Facilitator validation — fixed attestation text only. The
+            per-passport facilitator_note is staff-authored free text and is
+            deliberately not fetched or shown on a public page. */}
+        <Section title="Issued By">
           <p style={{ fontSize: 14, lineHeight: 1.6, color: '#3A4250', margin: 0 }}>
-            {p.facilitator_note ||
-              'This learner has successfully demonstrated practical capability through assignments, simulations, projects, and assessment activities within the Upthrust Career Capability Accelerator.'}
+            This learner completed assessed practical work — assignments, simulations,
+            a capstone project and facilitator review — within the Upthrust Career
+            Capability Accelerator.
           </p>
           <div style={{ marginTop: 12, fontSize: 13, color: MUTE }}>
             <strong style={{ color: INK }}>Genesis Nneji Enwenyeokwu</strong> · Founder &amp; Lead Facilitator, Upthrust
           </div>
         </Section>
-
-        {/* Portfolio link */}
-        {p.portfolio_url && (
-          <Section title="Learner Portfolio">
-            <a href={p.portfolio_url} target="_blank" rel="noopener noreferrer" style={{ color: GOLD, fontSize: 14, fontWeight: 600 }}>
-              {p.portfolio_url}
-            </a>
-          </Section>
-        )}
 
         {/* Honest interpretation — matches Notion sequencing guardrail */}
         <div style={{ background: '#F7F8FA', borderTop: '1px solid #E6E0D6', padding: '20px 28px' }}>

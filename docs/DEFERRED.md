@@ -10,14 +10,36 @@ Audit reference: `docs/PORTAL_AUDIT_2026-09-10.md`. Schema evidence: `docs/SCHEM
 
 ## Needs a decision before Cohort 2 goes live
 
+### D-0 · The Clerk webhook is unreachable, and fixing the path alone would arm a worse bug — **do not fix these separately**
+Audit F-20: middleware exempts `/api/webhooks/*` (plural, an empty directory); the handler is at `/api/webhook/clerk` (singular, `app/api/webhook/clerk/route.ts:13`). Clerk's POSTs carry no session cookie, so `auth.protect()` rejects them. No automatic account linking has ever fired.
+
+Audit F-21: `app/api/webhook/clerk/route.ts:36-43` — when `CLERK_WEBHOOK_SECRET` is unset, signature verification is **skipped** and the request body is trusted. That variable is absent from the local `.env.local` and was, until 2026-09-12, documented nowhere.
+
+**These two bugs currently mask each other.** F-20 means nothing reaches the handler; F-21 means that if anything did, and the secret were still unset, an unauthenticated caller could link an arbitrary Clerk account to an arbitrary learner email — account takeover for any learner whose email address is known.
+
+Not fixed here because it is outside the brief's scope, and because fixing the path without first setting the secret would convert a dead endpoint into a live vulnerability. **If you fix F-20, set `CLERK_WEBHOOK_SECRET` in Vercel in the same change**, and consider making the route refuse to run when the secret is missing rather than falling open. The `svix` dependency is already installed and the verification path already works.
+
+Task 5 did change this handler — it now stamps the active cohort and checks its insert error — but deliberately did not touch the routing or the verification logic.
+
 ### D-1 · The one live passport is internally inconsistent — **new finding**
 `passports` holds exactly one row: `UPT-PM-C1-2026-001`, `pathway = 'BA'`, `track = 'PM'`, `overall_score = 0`, `evidence = []`, `issued_at = 2026-06-03`.
 
 Three separate problems in one row. `track`/`pathway` contradict each other (F-3's regex, `lib/passport.ts:145`, materialised in live data). The score is zero, which `app/api/passport-issue/route.ts:93` should have made impossible — so this row was not created by that route as currently written. Evidence is empty (F-25).
 
-**Why it matters now:** Task 7 makes `/verify/[passportId]` public. This row then becomes publicly readable and renders as a valid issued credential showing a score of 0 and a PM ID for a BA learner. Task 7 unblocks the route; it cannot fix the data.
+**Why it matters now:** Task 7 has made `/verify/[passportId]` public. This row is now publicly readable at `/verify/UPT-PM-C1-2026-001`.
 
-**Decision needed:** correct the row, revoke it (`status = 'revoked'` makes the verify page show "Passport revoked"), or accept it. Not actioned here because mutating a signed credential is the owner's call, and any edit invalidates its HMAC signature.
+**What Task 7 already mitigated:** the public page no longer renders `overall_score`, `rating`, `readiness_level`, `capability_breakdown` or `evidence`, so the zero score and the empty evidence list are no longer visible to anyone. What remains visible is the **`UPT-PM-…` credential ID against a `BA` programme label** — the contradiction is still on the page, because the ID is the verification key and cannot be hidden.
+
+**Decision needed:** correct the row, revoke it (`status = 'revoked'` makes the verify page show "Passport revoked" and disclose nothing else), or accept it. Not actioned here because mutating a signed credential is the owner's call and any edit invalidates its HMAC signature.
+
+### D-1b · `/verify` is enumerable — **new, and a direct consequence of Task 7**
+Passport IDs are sequential and guessable by design: `UPT-<PM|BA>-C<n>-<year>-<seq3>` (`lib/passport.ts:138-147`). `lib/passport.ts:76` acknowledges this and argues the signature is the real control. That reasoning holds for *tampering*, but not for *enumeration*: the page renders for any validly issued row whether or not a `?sig` is supplied, because `cryptoVerified = sigParamValid || storedSigValid` and `storedSigValid` checks the row against itself (audit F-29).
+
+So someone who guesses IDs can currently harvest **learner name + programme + cohort + issue date**. With one passport issued that is negligible; at the end of a cohort it is a roster.
+
+Task 7 reduced the payload to those four fields but deliberately did not change the access rule, because requiring a valid `?sig` would break the verification URL already printed on the one issued credential (`app/api/passport-pdf/route.ts:477` prints a bare URL with no signature).
+
+**Recommended before the first cohort graduates:** require a valid `?sig` to render anything, and make the PDF/QR emit the signed URL — which is what `app/api/passport-pdf/QR_PATCH.md` was already written to do. That closes enumeration and makes the `?sig` parameter meaningful at the same time.
 
 ### D-2 · `sessions` appears to have no RLS — **new finding**
 The anon key reads all 7 rows of `sessions` (`docs/SCHEMA_DRIFT.md` §4). The table has no `CREATE TABLE` in any repo file, so `ENABLE ROW LEVEL SECURITY` was almost certainly never run on it. Zoom links, session dates and descriptions are readable by anyone holding the anon key, which ships in the client JS bundle.
