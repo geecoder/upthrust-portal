@@ -1732,14 +1732,26 @@ There is no runtime env validation — no zod schema, no startup assertion, no `
 
 ## Secrets, keys and credentials committed to the repo
 
-**SEC-1 — `.env.local.example` is tracked in Git and contains real-looking secret values for two variables.**
+> **RETRACTED 2026-09-12 — SEC-1 below was a false positive. Corrected text follows the strikethrough.**
 
-| File | Variable | Line |
-|---|---|---|
-| `.env.local.example` | `CLERK_SECRET_KEY` | 3 |
-| `.env.local.example` | `ANTHROPIC_API_KEY` | 23 |
+**~~SEC-1 — `.env.local.example` is tracked in Git and contains real-looking secret values for two variables.~~**
 
-Both lines carry values matching live-credential formats rather than placeholder text. The file is in `git ls-files` and has been committed to `master`. Values are not reproduced here. **Both keys should be treated as compromised and rotated**, and the file's history considered public if the repo has ever been shared, forked or cloned.
+~~Both lines carry values matching live-credential formats rather than placeholder text. Both keys should be treated as compromised and rotated.~~
+
+**Correction.** The `CLERK_SECRET_KEY` and `ANTHROPIC_API_KEY` values in `.env.local.example` are **placeholders, not credentials.** The original sweep used prefix patterns (`sk_test_`, `sk-ant-`) and matched those prefixes *inside* placeholder strings, without checking value length or placeholder markers. Re-checked on 2026-09-12:
+
+| Variable | Value length in file | Real credential length | Placeholder marker present |
+|---|---|---|---|
+| `CLERK_SECRET_KEY` | 29 | ~48+ | Yes |
+| `ANTHROPIC_API_KEY` | 28 | ~108 | Yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | 34 | 40+ or 200+ | Yes |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 26 | 200+ (JWT) | Yes |
+
+A full-history scan for real credential shapes (`sk_live_`/`sk_test_` + 30, `sk-ant-api\d\d-` + 50, `eyJhbGciOiJ` + 40, `re_` + 25, `sb_secret_` + 20, `pk_live_` + 20) across **every commit** and all **98 paths ever tracked** returns zero matches. `.env.local` has never been committed (`git log --all -- .env.local` is empty) and is covered by `.gitignore:27`.
+
+**No real credential has ever been committed to this repo. No rotation was required.** Rotation is harmless if already performed, but it was not necessary and was not caused by a genuine exposure.
+
+The file was still standardised on 2026-09-12 (commit `fix(F-13)`) so that future scans cannot repeat this mistake, and three env vars read by code but previously undocumented — `PASSPORT_SECRET`, `CLERK_WEBHOOK_SECRET`, `NEXT_PUBLIC_ZOOM_LINK` — were added to it.
 
 Confirmed clean, for contrast:
 
@@ -1839,7 +1851,7 @@ Severity is about the code as it stands today. Revamp risk is about absorption t
 | **F-10** | Data model | **Five disagreeing sources of cohort/date truth**, and re-running the content seed republishes all 13 weeks, reverting every manual unpublish | `lib/types.ts:305-334`; `supabase-schema.sql:147-202`; `supabase-weeks-seed.sql:26-171` (`:171`); `app/portal/sessions/page.tsx:15-23`; 8× `getCurrentWeek()` | **High** | **BLOCKER for D** |
 | **F-11** | Data model | `getCurrentWeek()` duplicated in **eight files**, each hardcoding `2026-06-06` and a cap of 12; one returns `-1` where seven return `0` | `app/portal/layout.tsx:66`, `app/admin/layout.tsx:32`, `app/portal/page.tsx:23`, `app/admin/page.tsx:328`, `app/portal/week/page.tsx:56`, `app/portal/sessions/page.tsx:9`, `app/portal/resources/page.tsx:45`, `app/admin/attendance/page.tsx:9` | Medium | **BLOCKER for A and D** |
 | **F-12** | Data model | Cohort is free text defaulting to `'Cohort 1'`, written by three paths, changeable by **no** UI. `admin_update_learner` accepts only pathway/tier/status. **A second cohort cannot be created through the product** | `supabase-schema.sql:16`; `app/api/webhook/clerk/route.ts:126`; `app/admin/learners/add/page.tsx:49`; `app/api/admin/data/route.ts:71-73` | **High** | **BLOCKER for D** |
-| **F-13** | Security | **`.env.local.example` is tracked in Git with real-looking secret values for `CLERK_SECRET_KEY` (line 3) and `ANTHROPIC_API_KEY` (line 23).** Both must be treated as compromised and rotated | `.env.local.example:3`, `:23` | **BLOCKER** | Independent |
+| **F-13** | Security | ~~`.env.local.example` is tracked in Git with real-looking secret values for `CLERK_SECRET_KEY` and `ANTHROPIC_API_KEY`.~~ **RETRACTED 2026-09-12 — FALSE POSITIVE.** Those values are placeholders (24–34 chars, each containing a `REPLACE`/`YOUR`/`here` marker). The original sweep matched the `sk_test_` and `sk-ant-` *prefixes* inside placeholder strings and did not check length or markers. A full-history scan for real credential shapes across all commits and all 98 ever-tracked paths returns nothing: **no real credential has ever been committed to this repo.** No rotation was required. See commit `fix(F-13)` | `.env.local.example` | ~~BLOCKER~~ **Not a defect** | Independent |
 | **F-14** | Auth | `update_profile` spreads an **unvalidated `fields` object** into a service-role `.update()` on the caller's own learner row. Any signed-in learner can set `passport_eligibility: 'Approved'`, `avg_score: 95`, `tier: 'Premium'`, `enrollment_status`, `pathway`, `risk_status`. The correct allowlist pattern exists 12 lines below in the same file | `app/api/admin/data/route.ts:54-61` vs `:70-75` | **BLOCKER** | Independent |
 | **F-15** | Auth | Combined with F-14: the Premium-tier gate on passport download is **UI-only** — `passport-pdf` checks eligibility and never reads `tier`. A learner can self-approve then fetch their credential | `app/portal/passport/page.tsx:108,117-124` vs `app/api/passport-pdf/route.ts:517` | **High** | Independent |
 | **F-16** | Grading | **Three of four review-queue buttons write statuses the DB CHECK forbids** (`Resubmission Requested`, `Human Reviewed`, `AI Reviewed`). The revision loop cannot be initiated, and every downstream feature reading those statuses is unreachable code | `supabase-schema.sql:73` vs `app/admin/reviews/page.tsx:44,288,292` and `app/api/submit-assignment/route.ts:278` | **BLOCKER** | Independent |
