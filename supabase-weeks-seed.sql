@@ -1,9 +1,77 @@
 -- ============================================================
 -- UPTHRUST PORTAL — WEEK CONTENT SEED
--- Run in Supabase SQL Editor
--- Seeds all 13 weeks (W0–W12) with titles, phases, dates,
--- outcomes, and assignment briefs for PM and BA pathways.
 -- ============================================================
+-- SAFE BY DEFAULT AS OF 2026-09-12. Read this before running.
+--
+-- WHAT THIS FILE USED TO DO
+-- Its ON CONFLICT clause overwrote title, phase, session_date, why_it_matters,
+-- pre_work, outcomes, all eight pm_*/ba_* assignment fields AND is_published
+-- on every one of the 13 weeks, unconditionally. The trailing UPDATE statements
+-- overwrote every reflection_prompt the same way.
+--
+-- WHY THAT MATTERED MORE THAN THE ORIGINAL FINDING SAID
+-- Audit finding F-10 described this as "reverting manual unpublishes". It was
+-- worse. Production's 13 week titles match NEITHER this file NOR
+-- supabase-schema.sql — the live curriculum is a third, newer structure
+-- (weeks 3-8 are "Track Week N", the capstone arc starts at week 9). Running
+-- this file as it stood would have silently destroyed the entire live
+-- curriculum, not merely republished it. See docs/SCHEMA_DRIFT.md section 6.
+--
+-- WHAT IT DOES NOW
+-- Default behaviour is FILL-ONLY and NON-DESTRUCTIVE:
+--   * a week that does not exist is inserted
+--   * a column that is NULL is filled
+--   * a column that already has a value is LEFT ALONE
+--   * is_published is NEVER changed, in either direction
+-- Running it twice produces the same result as running it once, and running it
+-- against the live database changes nothing that already has content.
+--
+-- TO DELIBERATELY OVERWRITE, opt in per concern. SET LOCAL only lives for the
+-- surrounding transaction, so the opt-in and the seed MUST run together:
+--
+--   BEGIN;
+--     -- overwrite week content (titles, briefs, outcomes, dates, prompts):
+--     SET LOCAL app.seed_overwrite_content = 'on';
+--     -- allow this file to change publish state in bulk:
+--     SET LOCAL app.seed_change_publish_state = 'on';
+--
+--     -- paste the rest of this file here, then:
+--   COMMIT;
+--
+-- Both default to off. Running the file on its own — the normal case, and what
+-- happens if someone pastes it without reading this header — is fill-only and
+-- cannot change publish state.
+--
+-- Take a backup before any overwrite run:
+--   CREATE TABLE weeks_backup_20260912 AS SELECT * FROM weeks;
+--
+-- NOTE ON CONTENT ACCURACY
+-- The 13 rows below are STALE relative to production. Treat this file as
+-- historical. Curriculum is edited through /admin/content, and schema changes
+-- belong in supabase/migrations/. See supabase/migrations/0000_baseline.sql.
+-- ============================================================
+
+-- Report the mode before doing anything, so a run in the SQL Editor is never
+-- ambiguous about which behaviour is active.
+DO $seedmode$
+BEGIN
+  RAISE NOTICE '--- weeks seed: content overwrite = %, publish-state change = % ---',
+    COALESCE(current_setting('app.seed_overwrite_content', true), 'off'),
+    COALESCE(current_setting('app.seed_change_publish_state', true), 'off');
+
+  IF COALESCE(current_setting('app.seed_change_publish_state', true), 'off') = 'on' THEN
+    RAISE NOTICE 'PUBLISH STATE WILL BE OVERWRITTEN for every week listed below.';
+  ELSE
+    RAISE NOTICE 'Publish state is protected: is_published will not be modified.';
+  END IF;
+
+  IF COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on' THEN
+    RAISE NOTICE 'CONTENT WILL BE OVERWRITTEN for every week listed below.';
+  ELSE
+    RAISE NOTICE 'Content is protected: only NULL columns will be filled.';
+  END IF;
+END
+$seedmode$;
 
 -- First ensure weeks table exists and has required columns
 ALTER TABLE weeks ADD COLUMN IF NOT EXISTS why_it_matters TEXT;
@@ -154,33 +222,117 @@ true),
 true)
 
 ON CONFLICT (week_number) DO UPDATE SET
-  title = EXCLUDED.title,
-  phase = EXCLUDED.phase,
-  session_date = EXCLUDED.session_date,
-  why_it_matters = EXCLUDED.why_it_matters,
-  pre_work = EXCLUDED.pre_work,
-  outcomes = EXCLUDED.outcomes,
-  pm_assignment_title = EXCLUDED.pm_assignment_title,
-  pm_assignment_brief = EXCLUDED.pm_assignment_brief,
-  pm_deliverable = EXCLUDED.pm_deliverable,
-  pm_due_date = EXCLUDED.pm_due_date,
-  ba_assignment_title = EXCLUDED.ba_assignment_title,
-  ba_assignment_brief = EXCLUDED.ba_assignment_brief,
-  ba_deliverable = EXCLUDED.ba_deliverable,
-  ba_due_date = EXCLUDED.ba_due_date,
-  is_published = EXCLUDED.is_published;
+  -- Fill-only by default: COALESCE keeps whatever the row already has and only
+  -- supplies a value where the column is NULL. With
+  -- app.seed_overwrite_content = 'on', the seeded value wins instead.
+  title               = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.title               ELSE COALESCE(weeks.title, EXCLUDED.title) END,
+  phase               = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.phase               ELSE COALESCE(weeks.phase, EXCLUDED.phase) END,
+  session_date        = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.session_date        ELSE COALESCE(weeks.session_date, EXCLUDED.session_date) END,
+  why_it_matters      = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.why_it_matters      ELSE COALESCE(weeks.why_it_matters, EXCLUDED.why_it_matters) END,
+  pre_work            = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.pre_work            ELSE COALESCE(weeks.pre_work, EXCLUDED.pre_work) END,
+  outcomes            = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.outcomes            ELSE COALESCE(weeks.outcomes, EXCLUDED.outcomes) END,
+  pm_assignment_title = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.pm_assignment_title ELSE COALESCE(weeks.pm_assignment_title, EXCLUDED.pm_assignment_title) END,
+  pm_assignment_brief = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.pm_assignment_brief ELSE COALESCE(weeks.pm_assignment_brief, EXCLUDED.pm_assignment_brief) END,
+  pm_deliverable      = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.pm_deliverable      ELSE COALESCE(weeks.pm_deliverable, EXCLUDED.pm_deliverable) END,
+  pm_due_date         = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.pm_due_date         ELSE COALESCE(weeks.pm_due_date, EXCLUDED.pm_due_date) END,
+  ba_assignment_title = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.ba_assignment_title ELSE COALESCE(weeks.ba_assignment_title, EXCLUDED.ba_assignment_title) END,
+  ba_assignment_brief = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.ba_assignment_brief ELSE COALESCE(weeks.ba_assignment_brief, EXCLUDED.ba_assignment_brief) END,
+  ba_deliverable      = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.ba_deliverable      ELSE COALESCE(weeks.ba_deliverable, EXCLUDED.ba_deliverable) END,
+  ba_due_date         = CASE WHEN COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on'
+                             THEN EXCLUDED.ba_due_date         ELSE COALESCE(weeks.ba_due_date, EXCLUDED.ba_due_date) END,
+  -- THE GUARD. Without an explicit opt-in this evaluates to the row's own
+  -- current value, so a manual unpublish in /admin/content survives any number
+  -- of re-runs of this file.
+  is_published        = CASE WHEN COALESCE(current_setting('app.seed_change_publish_state', true), 'off') = 'on'
+                             THEN EXCLUDED.is_published        ELSE weeks.is_published END;
 
--- Set up the reflection prompts
-UPDATE weeks SET reflection_prompt = 'What was the most surprising thing you learned this week? What changed in how you think about the role?' WHERE week_number = 1;
-UPDATE weeks SET reflection_prompt = 'Describe a time recently when you (or someone you know) solved a symptom instead of a root cause. How would you reframe the problem now?' WHERE week_number = 2;
-UPDATE weeks SET reflection_prompt = 'What is the most important strategic trade-off in your product/case study? What are you choosing NOT to do, and why?' WHERE week_number = 3;
-UPDATE weeks SET reflection_prompt = 'Review your PRD/BRD. Find the one requirement that is most likely to cause a debate with engineering. How would you defend it?' WHERE week_number = 4;
-UPDATE weeks SET reflection_prompt = 'What did your user research reveal that surprised you most? How did it change what you thought you already knew?' WHERE week_number = 5;
-UPDATE weeks SET reflection_prompt = 'Review the design brief you wrote. If you were a designer receiving this brief, what would your first 3 questions be?' WHERE week_number = 6;
-UPDATE weeks SET reflection_prompt = 'What is the hardest trade-off you had to make in your design review? How did you decide?' WHERE week_number = 7;
-UPDATE weeks SET reflection_prompt = 'After sprint planning, what is the most underestimated story in your backlog? What makes it harder than it looks?' WHERE week_number = 8;
-UPDATE weeks SET reflection_prompt = 'Which stakeholder simulation challenged you most, and why? What specific phrase or tactic would you use differently next time?' WHERE week_number = 9;
-UPDATE weeks SET reflection_prompt = 'What is the most important go/no-go decision in your launch plan? Who needs to sign off on it, and what would make you delay?' WHERE week_number = 10;
-UPDATE weeks SET reflection_prompt = 'If your product launched tomorrow and one of your metrics was not moving, what would be your first hypothesis about why?' WHERE week_number = 11;
-UPDATE weeks SET reflection_prompt = 'Looking back at Week 0 — what did you think the role of PM/BA was then, and what do you know now that you did not know then?' WHERE week_number = 12;
+-- Reflection prompts.
+-- These were 12 unconditional UPDATEs that overwrote whatever was live. Each is
+-- now fill-only unless app.seed_overwrite_content = 'on'.
+UPDATE weeks SET reflection_prompt = 'What was the most surprising thing you learned this week? What changed in how you think about the role?' WHERE week_number = 1
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'Describe a time recently when you (or someone you know) solved a symptom instead of a root cause. How would you reframe the problem now?' WHERE week_number = 2
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'What is the most important strategic trade-off in your product/case study? What are you choosing NOT to do, and why?' WHERE week_number = 3
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'Review your PRD/BRD. Find the one requirement that is most likely to cause a debate with engineering. How would you defend it?' WHERE week_number = 4
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'What did your user research reveal that surprised you most? How did it change what you thought you already knew?' WHERE week_number = 5
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'Review the design brief you wrote. If you were a designer receiving this brief, what would your first 3 questions be?' WHERE week_number = 6
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'What is the hardest trade-off you had to make in your design review? How did you decide?' WHERE week_number = 7
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'After sprint planning, what is the most underestimated story in your backlog? What makes it harder than it looks?' WHERE week_number = 8
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'Which stakeholder simulation challenged you most, and why? What specific phrase or tactic would you use differently next time?' WHERE week_number = 9
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'What is the most important go/no-go decision in your launch plan? Who needs to sign off on it, and what would make you delay?' WHERE week_number = 10
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'If your product launched tomorrow and one of your metrics was not moving, what would be your first hypothesis about why?' WHERE week_number = 11
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
+UPDATE weeks SET reflection_prompt = 'Looking back at Week 0 — what did you think the role of PM/BA was then, and what do you know now that you did not know then?' WHERE week_number = 12
+  AND (reflection_prompt IS NULL
+       OR COALESCE(current_setting('app.seed_overwrite_content', true), 'off') = 'on');
 
+
+
+-- ============================================================
+-- VERIFICATION — prove the guard works, on a real database.
+-- ============================================================
+-- This was NOT run by the agent that wrote this file: there was no database it
+-- was permitted to execute SQL against. Run it yourself. It is safe: it
+-- unpublishes one week, re-runs the seed, checks the week is still unpublished,
+-- and puts the week back exactly as it was.
+--
+--   -- 1. Record the starting state of every week.
+--   CREATE TEMP TABLE seed_guard_check AS
+--     SELECT week_number, title, is_published FROM weeks ORDER BY week_number;
+--
+--   -- 2. Unpublish week 12, as an admin would via /admin/content.
+--   UPDATE weeks SET is_published = false WHERE week_number = 12;
+--   SELECT week_number, is_published FROM weeks WHERE week_number = 12;
+--   -- expect: 12 | false
+--
+--   -- 3. Re-run this ENTIRE seed file, with NO opt-in flags set.
+--
+--   -- 4. The manual unpublish must have survived.
+--   SELECT week_number, is_published FROM weeks WHERE week_number = 12;
+--   -- expect: 12 | false        <-- the guard works
+--   -- before this change it would have been: 12 | true
+--
+--   -- 5. No title may have changed.
+--   SELECT w.week_number, c.title AS before, w.title AS after
+--   FROM weeks w JOIN seed_guard_check c USING (week_number)
+--   WHERE w.title IS DISTINCT FROM c.title;
+--   -- expect: 0 rows
+--
+--   -- 6. Restore.
+--   UPDATE weeks w SET is_published = c.is_published
+--   FROM seed_guard_check c WHERE w.week_number = c.week_number;
+--   DROP TABLE seed_guard_check;
+-- ============================================================
