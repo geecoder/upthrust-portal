@@ -268,9 +268,17 @@ Since you cannot access the link, provide guidance based on what the assignment 
     // Don't fail the whole request — submission was already saved
   }
 
-  // 5. Save AI feedback to assignment
+  // 5. Save AI feedback to assignment.
+  //    This write was previously unchecked. It sets status = 'AI Reviewed' in
+  //    the same statement, so if that value were ever rejected by the CHECK
+  //    constraint the whole update would fail, the feedback would be discarded,
+  //    and the route would still return success with the feedback in the body —
+  //    the learner sees it once and it is gone on reload.
+  //    If the status write fails, retry with the feedback alone so the learner's
+  //    feedback is never lost to a status-vocabulary problem.
+  let aiFeedbackPersisted = false;
   if (aiFeedback) {
-    await db
+    const { error: aiSaveError } = await db
       .from('assignments')
       .update({
         ai_feedback: aiFeedback,
@@ -278,11 +286,33 @@ Since you cannot access the link, provide guidance based on what the assignment 
         status: 'AI Reviewed',
       })
       .eq('id', assignmentId);
+
+    if (aiSaveError) {
+      console.error('[submit-assignment] AI feedback write failed:', aiSaveError.message);
+      const { error: retryError } = await db
+        .from('assignments')
+        .update({
+          ai_feedback: aiFeedback,
+          ai_feedback_at: new Date().toISOString(),
+        })
+        .eq('id', assignmentId);
+      if (retryError) {
+        console.error('[submit-assignment] AI feedback retry also failed:', retryError.message);
+      } else {
+        aiFeedbackPersisted = true;
+        console.warn('[submit-assignment] Saved ai_feedback without status transition.');
+      }
+    } else {
+      aiFeedbackPersisted = true;
+    }
   }
 
   return NextResponse.json({
     success: true,
     assignmentId,
     aiFeedback: aiFeedback || null,
+    // false means the feedback in this response was NOT stored and will not
+    // survive a reload. The submission itself is saved either way.
+    aiFeedbackPersisted,
   });
 }

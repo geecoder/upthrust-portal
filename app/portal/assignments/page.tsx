@@ -51,9 +51,12 @@ interface Assignment {
 
 const STATUS_COLOR: Record<string, string> = {
   'Not Started':              'var(--ink-muted)',
+  'In Progress':              '#D97706',
   'Submitted':                '#1D4ED8',
+  'In Review':                '#7C3AED',
   'AI Reviewed':              '#7C3AED',
   'Human Reviewed':           '#1D4ED8',
+  'Needs Revision':           'var(--red)',
   'Resubmission Requested':   'var(--red)',
   'Approved':                 'var(--moss)',
   'Portfolio Ready':          '#047857',
@@ -61,9 +64,12 @@ const STATUS_COLOR: Record<string, string> = {
 
 const STATUS_BG: Record<string, string> = {
   'Not Started':              'rgba(107,114,128,0.08)',
+  'In Progress':              'rgba(217,119,6,0.08)',
   'Submitted':                'rgba(37,99,235,0.08)',
+  'In Review':                'rgba(124,58,237,0.08)',
   'AI Reviewed':              'rgba(124,58,237,0.08)',
   'Human Reviewed':           'rgba(29,78,216,0.08)',
+  'Needs Revision':           'rgba(179,56,44,0.08)',
   'Resubmission Requested':   'rgba(179,56,44,0.08)',
   'Approved':                 'rgba(5,150,105,0.08)',
   'Portfolio Ready':          'rgba(4,120,87,0.1)',

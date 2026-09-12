@@ -3,7 +3,23 @@ export type Tier = 'Standard' | 'Premium' | 'VIP' | 'Corporate';
 export type RiskStatus = 'Green' | 'Amber' | 'Red';
 export type EnrollmentStatus = 'Pending' | 'Active' | 'Completed' | 'Withdrawn';
 export type PassportEligibility = 'Not Eligible' | 'Pending Review' | 'Approved' | 'Withheld' | 'Needs Revision';
-export type AssignmentStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'AI Reviewed' | 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Portfolio Ready';
+// Must stay in step with the CHECK constraint on assignments.status —
+// see supabase/migrations/0001_assignments_status_check.sql.
+// 'In Review' and 'Needs Revision' are legacy values from the original schema:
+// 'In Review' is written by app/api/ai-feedback/route.ts:175, and production
+// holds one 'Needs Revision' row set by hand. Both were missing from this union,
+// so neither had a colour entry below and both rendered with fallback styling.
+export type AssignmentStatus =
+  | 'Not Started'
+  | 'In Progress'
+  | 'Submitted'
+  | 'In Review'
+  | 'AI Reviewed'
+  | 'Human Reviewed'
+  | 'Needs Revision'
+  | 'Resubmission Requested'
+  | 'Approved'
+  | 'Portfolio Ready';
 export type Phase = 'Foundation' | 'Core Skills' | 'Delivery' | 'Capstone';
 export type CapabilityLevel = 'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Portfolio Ready';
 export type ResourceType = 
@@ -270,8 +286,10 @@ export const ASSIGNMENT_STATUS_COLOR: Record<string, string> = {
   'Not Started': '#6B7280',
   'In Progress': '#D97706',
   'Submitted': '#2563EB',
+  'In Review': '#7C3AED',
   'AI Reviewed': '#7C3AED',
   'Human Reviewed': '#1D4ED8',
+  'Needs Revision': '#DC2626',
   'Resubmission Requested': '#DC2626',
   'Approved': '#059669',
   'Portfolio Ready': '#047857',
@@ -281,8 +299,10 @@ export const ASSIGNMENT_STATUS_BG: Record<string, string> = {
   'Not Started': 'rgba(107,114,128,0.1)',
   'In Progress': 'rgba(217,119,6,0.1)',
   'Submitted': 'rgba(37,99,235,0.1)',
+  'In Review': 'rgba(124,58,237,0.1)',
   'AI Reviewed': 'rgba(124,58,237,0.1)',
   'Human Reviewed': 'rgba(29,78,216,0.1)',
+  'Needs Revision': 'rgba(220,38,38,0.1)',
   'Resubmission Requested': 'rgba(220,38,38,0.1)',
   'Approved': 'rgba(5,150,105,0.1)',
   'Portfolio Ready': 'rgba(4,120,87,0.1)',
