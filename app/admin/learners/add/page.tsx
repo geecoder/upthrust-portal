@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@/lib/supabase';
 import Link from 'next/link';
@@ -25,6 +25,16 @@ export default function AddLearnerPage() {
     country: 'Nigeria', pathway: '', tier: 'Standard',
     current_job_role: '', career_goal: '', linkedin_url: '',
   });
+  // Resolved server-side from app_settings rather than hardcoded, so learners
+  // added after the Cohort 2 rollover are not stamped Cohort 1.
+  const [activeCohort, setActiveCohort] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/data?resource=active_cohort')
+      .then(r => r.json())
+      .then(d => setActiveCohort(d.active_cohort ?? null))
+      .catch(() => setActiveCohort(null));
+  }, []);
 
   function f(k: keyof typeof form, v: string) { setForm(prev => ({ ...prev, [k]: v })); }
 
@@ -46,7 +56,7 @@ export default function AddLearnerPage() {
       country: form.country,
       pathway: form.pathway,
       tier: form.tier,
-      cohort: 'Cohort 1',
+      cohort: activeCohort ?? 'Cohort 1',
       enrollment_status: 'Active',
       attendance_pct: 0,
       assignment_completion_pct: 0,
@@ -95,7 +105,9 @@ export default function AddLearnerPage() {
           ← All Learners
         </Link>
         <p style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>Admin</p>
-        <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.75rem', fontWeight: 400 }}>Add Learner to Cohort 1</h1>
+        <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.75rem', fontWeight: 400 }}>
+          Add Learner to {activeCohort ?? '…'}
+        </h1>
         <p style={{ color: 'var(--ink-muted)', marginTop: 4, fontSize: '0.9rem' }}>
           Add a learner manually. Once added, they sign up at the portal and are automatically linked to this record via Clerk webhook.
         </p>

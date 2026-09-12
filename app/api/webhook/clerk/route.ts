@@ -17,6 +17,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { getActiveCohort } from '@/lib/cohort';
 
 // Verify the webhook came from Clerk using svix signature
 async function verifyClerkWebhook(req: Request): Promise<{ event: string; data: any } | null> {
@@ -116,14 +117,17 @@ export async function POST(req: Request) {
     // Create a pending record so they see "Access Pending" screen.
     // Pathway is intentionally left null — it must be set explicitly by an
     // admin so a learner is never silently placed on the wrong track.
-    await db.from('learners').insert({
+    // Cohort comes from app_settings, not a literal, so learners enrolling
+    // after the Cohort 2 rollover are not stamped Cohort 1.
+    const cohort = await getActiveCohort(db);
+    const { error: insertError } = await db.from('learners').insert({
       clerk_user_id: clerkUserId,
       email,
       first_name: firstName || email.split('@')[0],
       last_name: lastName || undefined,
       pathway: null, // assigned by admin — never assume PM
       tier: 'Standard',
-      cohort: 'Cohort 1',
+      cohort,
       enrollment_status: 'Pending',
       attendance_pct: 0,
       assignment_completion_pct: 0,
@@ -136,8 +140,13 @@ export async function POST(req: Request) {
       onboarding_complete: false,
     });
 
-    console.log(`[Clerk Webhook] Created pending record for ${email}`);
-    return NextResponse.json({ message: 'Pending record created', email });
+    if (insertError) {
+      console.error(`[Clerk Webhook] Failed to create pending record for ${email}:`, insertError.message);
+      return NextResponse.json({ error: 'Could not create learner record' }, { status: 500 });
+    }
+
+    console.log(`[Clerk Webhook] Created pending record for ${email} in ${cohort}`);
+    return NextResponse.json({ message: 'Pending record created', email, cohort });
   }
 
   // ── user.updated — profile change or email change ────────────

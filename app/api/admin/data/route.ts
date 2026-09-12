@@ -13,6 +13,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 import { pickAllowedFields, LEARNER_SELF_EDITABLE } from '@/lib/request-fields';
+import { getActiveCohort, validateCohortLabel, ACTIVE_COHORT_SETTING_KEY } from '@/lib/cohort';
 
 // Pull the first absolute http(s) URL out of an arbitrary string.
 // Zoom invites are often pasted as a full blob ("X is inviting you to a
@@ -68,6 +69,33 @@ export async function POST(req: Request) {
         const { error } = await db.from('learners').update(picked.values).eq('id', learner.id);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         return NextResponse.json({ success: true });
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // ADMIN: set the active cohort.
+      // Affects ONLY learners created from now on. Existing learner rows are
+      // never touched — there is no UPDATE against `learners` in this case.
+      // ─────────────────────────────────────────────────────────
+      case 'set_active_cohort': {
+        if (!isAdmin(userId)) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+        const check = validateCohortLabel(body.cohort);
+        if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+
+        const { error } = await db.from('app_settings').upsert({
+          key: ACTIVE_COHORT_SETTING_KEY,
+          value: check.value,
+          description: 'Cohort stamped on learners created from now on. Changing this does not move existing learners.',
+          updated_at: new Date().toISOString(),
+          updated_by: userId,
+        }, { onConflict: 'key' });
+
+        if (error) {
+          return NextResponse.json(
+            { error: `Could not save setting: ${error.message}. Has migration 0002_app_settings.sql been run?` },
+            { status: 500 }
+          );
+        }
+        return NextResponse.json({ success: true, active_cohort: check.value });
       }
 
       // ─────────────────────────────────────────────────────────
@@ -495,6 +523,11 @@ export async function GET(req: Request) {
         const { data } = await db.from('announcements').select('*')
           .order('created_at', { ascending: false });
         return NextResponse.json({ announcements: data || [] });
+      }
+      case 'active_cohort': {
+        // Any signed-in caller: the add-learner form needs it, and the value is
+        // a cohort label, not sensitive.
+        return NextResponse.json({ active_cohort: await getActiveCohort(db) });
       }
       case 'sessions': {
         const { data } = await db.from('sessions').select('*')

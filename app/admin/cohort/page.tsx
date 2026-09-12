@@ -31,18 +31,51 @@ export default function CohortCommunicationsPage() {
   // Past announcements (activity log)
   const [pastAnnouncements, setPastAnnouncements] = useState<any[]>([]);
 
+  // Active cohort — the label stamped on learners created from now on.
+  const [activeCohort, setActiveCohort] = useState<string>('');
+  const [cohortDraft, setCohortDraft] = useState<string>('');
+  const [savingCohort, setSavingCohort] = useState(false);
+
   const db = createBrowserClient();
 
   async function loadData() {
     // Load active learners through the admin API (bypasses RLS)
-    const [lRes, aRes] = await Promise.all([
+    const [lRes, aRes, cRes] = await Promise.all([
       fetch('/api/admin/data?resource=active_learners'),
       fetch('/api/admin/data?resource=announcements'),
+      fetch('/api/admin/data?resource=active_cohort'),
     ]);
     const lData = await lRes.json();
     const aData = await aRes.json();
     if (lRes.ok) setLearners((lData.learners || []) as Learner[]);
     if (aRes.ok) setPastAnnouncements(aData.announcements || []);
+    if (cRes.ok) {
+      const cData = await cRes.json();
+      setActiveCohort(cData.active_cohort || '');
+      setCohortDraft(cData.active_cohort || '');
+    }
+  }
+
+  async function saveActiveCohort() {
+    setSavingCohort(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/admin/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_active_cohort', cohort: cohortDraft }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult({ error: data.error || 'Could not save the active cohort.' });
+      } else {
+        setActiveCohort(data.active_cohort);
+        setResult({ success: `New learners will now be enrolled into ${data.active_cohort}. Existing learners are unchanged.` });
+      }
+    } catch {
+      setResult({ error: 'Network error saving the active cohort.' });
+    }
+    setSavingCohort(false);
   }
 
   useEffect(() => { loadData(); }, []);
@@ -219,6 +252,40 @@ export default function CohortCommunicationsPage() {
           {result.success ? `✓ ${result.success}` : `⚠ ${result.error}`}
         </div>
       )}
+
+      {/* Active cohort — the one setting this page owns */}
+      <div className="card" style={{ marginBottom: 24, borderLeft: '3px solid var(--amber)' }}>
+        <p style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 8 }}>
+          Active cohort
+        </p>
+        <p style={{ fontSize: '0.875rem', color: 'var(--ink-soft)', lineHeight: 1.6, marginBottom: 14 }}>
+          Learners created from now on — by the sign-up webhook or the Add Learner
+          form — are stamped with this label. <strong>Changing it does not move
+          anyone who is already enrolled.</strong>
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 220 }}>
+            <label className="form-label">Cohort label</label>
+            <input
+              className="form-input"
+              value={cohortDraft}
+              placeholder="Cohort 2"
+              onChange={e => setCohortDraft(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={saveActiveCohort}
+            disabled={savingCohort || !cohortDraft.trim() || cohortDraft.trim() === activeCohort}
+            className="btn btn-primary"
+          >
+            {savingCohort ? 'Saving…' : 'Set active cohort'}
+          </button>
+        </div>
+        <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', marginTop: 10 }}>
+          Currently: <strong>{activeCohort || 'not set'}</strong>. The label must contain
+          a number — Capability Passport IDs are built from it.
+        </p>
+      </div>
 
       {/* Tab bar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 }}>
