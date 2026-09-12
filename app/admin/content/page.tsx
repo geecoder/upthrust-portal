@@ -48,10 +48,17 @@ export default function ContentPage() {
   async function handleSave() {
     if (!editing) return;
     setSaving(true);
+    // Send only the fields this editor owns, plus the row id. Posting the whole
+    // week row meant every save rewrote columns the form never edits — including
+    // is_published, which belongs to the publish toggle below.
+    const payload: Record<string, unknown> = { id: editing.id };
+    for (const f of EDITABLE_FIELDS) {
+      payload[f.key] = (editing as unknown as Record<string, unknown>)[f.key] ?? null;
+    }
     const res = await fetch('/api/admin/save-week', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editing),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

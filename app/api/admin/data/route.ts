@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
+import { pickAllowedFields, LEARNER_SELF_EDITABLE } from '@/lib/request-fields';
 
 // Pull the first absolute http(s) URL out of an arbitrary string.
 // Zoom invites are often pasted as a full blob ("X is inviting you to a
@@ -52,10 +53,19 @@ export async function POST(req: Request) {
       // PROFILE — update own learner record
       // ─────────────────────────────────────────────────────────
       case 'update_profile': {
+        // Ownership comes from the Clerk session, never from the request body.
         const learner = await getLearner(db, userId);
         if (!learner) return NextResponse.json({ error: 'Learner not found' }, { status: 404 });
-        const { fields } = body;
-        const { error } = await db.from('learners').update(fields).eq('id', learner.id);
+
+        // The body is narrowed to columns a learner may set about themselves.
+        // Anything else — enrolment facts, derived metrics, passport gating —
+        // is refused with a 400 naming the offending keys, not dropped silently.
+        const picked = pickAllowedFields(body.fields, LEARNER_SELF_EDITABLE);
+        if (!picked.ok) {
+          return NextResponse.json({ error: picked.error, rejected: picked.rejected }, { status: picked.status });
+        }
+
+        const { error } = await db.from('learners').update(picked.values).eq('id', learner.id);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         return NextResponse.json({ success: true });
       }
