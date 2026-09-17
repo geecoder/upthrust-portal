@@ -14,6 +14,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 import { pickAllowedFields, LEARNER_SELF_EDITABLE } from '@/lib/request-fields';
 import { getActiveCohort, validateCohortLabel, ACTIVE_COHORT_SETTING_KEY } from '@/lib/cohort';
+import { guardModuleForLearner, type ModuleKey } from '@/lib/module-access';
 
 // Pull the first absolute http(s) URL out of an arbitrary string.
 // Zoom invites are often pasted as a full blob ("X is inviting you to a
@@ -37,6 +38,26 @@ async function getLearner(db: any, clerkUserId: string) {
 
 function isAdmin(userId: string) {
   return !!process.env.ADMIN_USER_ID && userId === process.env.ADMIN_USER_ID;
+}
+
+/**
+ * Refuse an action belonging to a gated module, server-side, before any work.
+ *
+ * Admins are not gated. The flag governs what LEARNERS can reach, and the admin
+ * is the person who owns the switch — blocking them would make a module
+ * unmanageable the moment it was turned off. The threat this closes is a
+ * learner calling the endpoint directly once the nav item is gone, which is the
+ * case that actually matters.
+ *
+ * Returns a 403 to return, or null to continue.
+ */
+async function denyIfModuleClosed(
+  moduleKey: ModuleKey,
+  userId: string,
+  learner: { cohort?: string | null } | null
+): Promise<NextResponse | null> {
+  if (isAdmin(userId)) return null;
+  return guardModuleForLearner(moduleKey, learner);
 }
 
 export async function POST(req: Request) {
@@ -168,6 +189,10 @@ export async function POST(req: Request) {
         const learner = await getLearner(db, userId);
         const adminPost = isAdmin(userId);
         if (!learner && !adminPost) return NextResponse.json({ error: 'Learner not found' }, { status: 404 });
+
+        const denied = await denyIfModuleClosed('community', userId, learner);
+        if (denied) return denied;
+
         const { post } = body;
         const { data, error } = await db.from('community_posts').insert({
           learner_id: learner?.id || null,
@@ -187,6 +212,10 @@ export async function POST(req: Request) {
         const learner = await getLearner(db, userId);
         const adminReply = isAdmin(userId);
         if (!learner && !adminReply) return NextResponse.json({ error: 'Learner not found' }, { status: 404 });
+
+        const denied = await denyIfModuleClosed('community', userId, learner);
+        if (denied) return denied;
+
         const { postId, content } = body;
         const { error } = await db.from('community_replies').insert({
           post_id: postId,
@@ -203,6 +232,10 @@ export async function POST(req: Request) {
       }
 
       case 'community_like': {
+        const likeLearner = await getLearner(db, userId);
+        const denied = await denyIfModuleClosed('community', userId, likeLearner);
+        if (denied) return denied;
+
         const { postId, newCount } = body;
         const { error } = await db.from('community_posts').update({ likes_count: newCount }).eq('id', postId);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });

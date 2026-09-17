@@ -33,6 +33,7 @@ const ADMIN_NAV = [
   { href: '/admin/content', label: 'Week Content', icon: '✏️' },
   { href: '/admin/resources', label: 'Resource Library', icon: '📚' },
   { href: '/admin/cohort', label: 'Cohort Settings', icon: '⚙️' },
+  { href: '/admin/modules', label: 'Module Access', icon: '🔐' },
 ];
 
 interface SidebarProps {
