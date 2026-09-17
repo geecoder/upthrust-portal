@@ -19,9 +19,9 @@ export type AssignmentStatus =
   | 'Needs Revision'
   | 'Resubmission Requested'
   | 'Approved'
-  | 'Portfolio Ready';
+  | 'Capstone Ready';
 export type Phase = 'Foundation' | 'Core Skills' | 'Delivery' | 'Capstone';
-export type CapabilityLevel = 'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Portfolio Ready';
+export type CapabilityLevel = 'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Capstone Ready';
 export type ResourceType = 
   | 'Template'
   | 'Example' 
@@ -264,7 +264,7 @@ export const PASSPORT_CRITERIA = {
   assignment_submission_min: 80,
   avg_score_min: 70,
   capstone_required: true,
-  portfolio_items_min: 8,
+  capstone_artefacts_min: 8,
 };
 
 // ── Capability areas ─────────────────────────────────────
@@ -282,6 +282,50 @@ export const CAPABILITY_AREAS = [
 ];
 
 // ── Status display helpers ────────────────────────────────
+/**
+ * Is this assignment finished work — approved, and eligible to count towards
+ * the Capability Passport?
+ *
+ * This predicate existed six times as a copied expression
+ * (`status === 'Approved' || status === 'Portfolio Ready' || portfolio_approved`)
+ * across the dashboard, the assignments page, the passport, the admin learner
+ * view and the PDF issuer. Migration 0004 renamed one of those values, which
+ * would have meant editing the same condition in six places and getting it
+ * right six times.
+ *
+ * It accepts the legacy 'Portfolio Ready' as well as the current
+ * 'Capstone Ready', for one specific reason: migration 0004 has to be applied
+ * BEFORE this code is deployed, and if the two ever get out of order this keeps
+ * READS correct — a learner's approved work does not vanish from their passport
+ * because a migration is a few minutes behind. Writes are not forgiving in the
+ * same way and are not meant to be: the CHECK constraint rejects the old value
+ * outright, so a wrong deployment order fails loudly at the review queue rather
+ * than quietly mislabelling work.
+ *
+ * `portfolio_approved` is a separate legacy boolean column, still set on some
+ * rows, and is kept in the test for the same reason it was in all six copies.
+ */
+export function isCapstoneReady(status?: string | null): boolean {
+  // Compared as a plain string on purpose: 'Portfolio Ready' is no longer in
+  // the AssignmentStatus union — nothing may write it — but rows still hold it
+  // until migration 0004 is applied, so reads must recognise it.
+  return status === 'Capstone Ready' || status === LEGACY_CAPSTONE_READY;
+}
+
+/** The pre-0004 spelling of 'Capstone Ready'. Read-only; never written. */
+export const LEGACY_CAPSTONE_READY = 'Portfolio Ready';
+
+export function isApprovedWork(
+  a: { status?: string | null; portfolio_approved?: boolean | null } | null | undefined
+): boolean {
+  if (!a) return false;
+  return (
+    a.status === 'Approved' ||
+    isCapstoneReady(a.status) ||
+    a.portfolio_approved === true
+  );
+}
+
 export const ASSIGNMENT_STATUS_COLOR: Record<string, string> = {
   'Not Started': '#6B7280',
   'In Progress': '#D97706',
@@ -292,6 +336,10 @@ export const ASSIGNMENT_STATUS_COLOR: Record<string, string> = {
   'Needs Revision': '#DC2626',
   'Resubmission Requested': '#DC2626',
   'Approved': '#059669',
+  'Capstone Ready': '#047857',
+  // Legacy: renamed to 'Capstone Ready' by migration 0004. Kept in the DISPLAY
+  // maps only, so a database that has not had 0004 applied still renders a
+  // badge instead of an unstyled one. Nothing writes it — see isApprovedWork().
   'Portfolio Ready': '#047857',
 };
 
@@ -305,7 +353,8 @@ export const ASSIGNMENT_STATUS_BG: Record<string, string> = {
   'Needs Revision': 'rgba(220,38,38,0.1)',
   'Resubmission Requested': 'rgba(220,38,38,0.1)',
   'Approved': 'rgba(5,150,105,0.1)',
-  'Portfolio Ready': 'rgba(4,120,87,0.1)',
+  'Capstone Ready': 'rgba(4,120,87,0.1)',
+  'Portfolio Ready': 'rgba(4,120,87,0.1)', // legacy, display only — see above
 };
 
 export const RISK_COLOR: Record<string, string> = {

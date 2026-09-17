@@ -6,7 +6,7 @@ import { UserButton } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@/lib/supabase';
 import { UpthrustLogo } from './UpthrustLogo';
-import type { ModuleAccessMap, ModuleKey } from '@/lib/module-access-rules';
+import { MODULE_REGISTRY, type ModuleAccessMap, type ModuleKey } from '@/lib/module-access-rules';
 
 // `module` names the module_access key that governs an item. An item without
 // one is ungated and always shows. Filtering is driven by this field rather
@@ -17,8 +17,10 @@ const LEARNER_NAV: NavItem[] = [
   { href: '/portal/week', label: 'Weekly Content', icon: '📅' },
   { href: '/portal/sessions', label: 'Live Sessions', icon: '🎥' },
   { href: '/portal/assignments', label: 'Assignments', icon: '📝' },
-  { href: '/portal/portfolio', label: 'My Portfolio', icon: '💼' },
   { href: '/portal/passport', label: 'Capability Passport', icon: '🏆' },
+  // Replaced 'My Portfolio' in M4. The old /portal/portfolio route redirects
+  // here, so nothing that links to it breaks.
+  { href: '/portal/capstone', label: 'Capstone', icon: '🎓', module: 'capstone' },
   { href: '/portal/community', label: 'Community', icon: '💬', module: 'community' },
   { href: '/portal/resources', label: 'Resources', icon: '📚' },
 ];
@@ -48,6 +50,9 @@ interface NavItem {
   exact?: boolean;
   module?: ModuleKey;
 }
+
+/** A nav item that has been through the access map. See visible(). */
+type ResolvedNavItem = NavItem & { locked: boolean };
 
 interface SidebarProps {
   learnerName?: string;
@@ -107,9 +112,24 @@ export default function Sidebar({
       .then(({ count }) => setUnreadCount(count || 0));
   }, [learnerId, isAdmin, notificationsOn]);
 
-  /** Drop items whose module is switched off. No item, not a hidden item. */
-  function visible(items: NavItem[]): NavItem[] {
-    return items.filter((i) => !i.module || access?.[i.module] === true);
+  /**
+   * Apply each item's module flag, honouring how the registry says a disabled
+   * module presents itself:
+   *
+   *   'absent'  the item is dropped. No item, not a hidden item.
+   *   'locked'  the item STAYS, marked locked, and still links to its route —
+   *             which renders the locked screen. Capstone is the only one.
+   *
+   * Read from MODULE_REGISTRY rather than hardcoded here, so the sidebar, the
+   * route gate and the admin console's description of the same module cannot
+   * disagree about what "off" looks like.
+   */
+  function visible(items: NavItem[]): ResolvedNavItem[] {
+    return items.flatMap<ResolvedNavItem>((i) => {
+      if (!i.module) return [{ ...i, locked: false }];
+      if (access?.[i.module] === true) return [{ ...i, locked: false }];
+      return MODULE_REGISTRY[i.module]?.presentation === 'locked' ? [{ ...i, locked: true }] : [];
+    });
   }
 
   const learnerNav = visible(LEARNER_NAV);
@@ -152,6 +172,13 @@ export default function Sidebar({
           border-left-color: #C5743A;
         }
         .sidebar-icon { font-size: 0.9375rem; line-height: 1; flex-shrink: 0; }
+        /* A locked item is dimmer and says why, but stays clickable — the whole
+           point of 'locked' over 'absent' is that the learner can go and read
+           when it opens. Not disabled, because a dead nav item that swallows a
+           click teaches the learner nothing. */
+        .sidebar-link.locked { color: rgba(250,247,241,0.3); }
+        .sidebar-link.locked:hover { color: rgba(250,247,241,0.55); }
+        .sidebar-lock { font-size: 0.5625rem; opacity: 0.7; margin-left: auto; flex-shrink: 0; }
         .sidebar-section {
           font-size: 0.5rem;
           font-weight: 800;
@@ -208,10 +235,16 @@ export default function Sidebar({
       <nav style={{ flex: 1, overflowY: 'auto', paddingTop: 8, paddingBottom: 8 }}>
 
         <div className="sidebar-section">Main</div>
-        {learnerNav.map(({ href, label, icon, exact }) => (
-          <Link key={href} href={href} className={`sidebar-link${isActive(href, exact) ? ' active' : ''}`}>
+        {learnerNav.map(({ href, label, icon, exact, locked }) => (
+          <Link
+            key={href}
+            href={href}
+            className={`sidebar-link${isActive(href, exact) ? ' active' : ''}${locked ? ' locked' : ''}`}
+            title={locked ? `${label} is not open yet` : undefined}
+          >
             <span className="sidebar-icon">{icon}</span>
             <span style={{ flex: 1 }}>{label}</span>
+            {locked && <span className="sidebar-lock" aria-label="Not open yet">🔒</span>}
             {href === '/portal/notifications' && unreadCount > 0 && (
               <span className="notif-badge">{unreadCount}</span>
             )}

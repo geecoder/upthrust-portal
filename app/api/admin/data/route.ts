@@ -152,7 +152,10 @@ export async function POST(req: Request) {
           url: item.url,
           week_number: item.week_number ? parseInt(item.week_number) : null,
           status: 'Submitted',
-          submitted_at: new Date().toISOString(),
+          // NOT submitted_at: portfolio_items has no such column, so every
+          // insert here failed with a PostgREST schema error and the table has
+          // 0 rows in production (docs/DEFERRED.md D-15). created_at is set by
+          // the column default and is the timestamp that was actually wanted.
         }).select('id').maybeSingle();
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         return NextResponse.json({ success: true, id: data?.id });

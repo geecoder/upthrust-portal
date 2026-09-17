@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase';
 import Link from 'next/link';
 import type { Learner, Assignment } from '@/lib/types';
-import { RISK_COLOR } from '@/lib/types';
+import { RISK_COLOR, isCapstoneReady } from '@/lib/types';
 
 function StatCard({ value, label, sub, color = 'var(--ink)', href }: {
   value: string | number; label: string; sub?: string; color?: string; href?: string;
@@ -43,7 +43,7 @@ export default async function AdminDashboard() {
   const active = typedLearners.filter(l => l.enrollment_status === 'Active');
   const pending = typedAssignments.filter(a => a.status === 'Submitted' || a.status === 'AI Reviewed');
   const resubRequired = typedAssignments.filter(a => a.status === 'Resubmission Requested');
-  const portfolioReady = typedAssignments.filter(a => a.status === 'Portfolio Ready' || a.portfolio_approved);
+  const capstoneReady = typedAssignments.filter(a => isCapstoneReady(a.status) || a.portfolio_approved);
   const redLearners = typedLearners.filter(l => l.risk_status === 'Red');
   const amberLearners = typedLearners.filter(l => l.risk_status === 'Amber');
   const totalSubmissions = typedAssignments.filter(a => a.status !== 'Not Started').length;
@@ -105,7 +105,7 @@ export default async function AdminDashboard() {
         <StatCard value={pending.length} label="Pending Reviews" sub="Need feedback" color="#2563EB" href="/admin/reviews" />
         <StatCard value={resubRequired.length} label="Resubmissions" sub="Waiting for update" color="var(--amber-deep)" href="/admin/reviews" />
         <StatCard value={`${submissionRate}%`} label="Submission Rate" sub={`${totalSubmissions} of ~${expectedSubmissions} expected`} color="var(--moss)" />
-        <StatCard value={portfolioReady.length} label="Portfolio Ready" sub="Artefacts approved" color="var(--amber)" href="/admin/reviews" />
+        <StatCard value={capstoneReady.length} label="Capstone Ready" sub="Artefacts approved" color="var(--amber)" href="/admin/reviews" />
       </div>
 
       {/* Main grid */}

@@ -159,7 +159,7 @@ export default async function WeekDetailPage({ params }: { params: Promise<{ wee
 
           {/* Assignment brief */}
           {assignBrief && (
-            <div className="card" style={{ borderLeft: `3px solid ${assignStatus === 'Approved' || assignStatus === 'Portfolio Ready' ? 'var(--moss)' : assignStatus !== 'Not Started' ? '#2563EB' : 'var(--amber)'}` }}>
+            <div className="card" style={{ borderLeft: `3px solid ${assignStatus === 'Approved' || assignStatus === 'Capstone Ready' ? 'var(--moss)' : assignStatus !== 'Not Started' ? '#2563EB' : 'var(--amber)'}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
                 <div>
                   <p style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--amber-deep)', marginBottom: 6 }}>

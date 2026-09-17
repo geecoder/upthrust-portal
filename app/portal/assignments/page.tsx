@@ -11,6 +11,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase';
 import AssignmentSubmitPanel from './AssignmentSubmitPanel';
+import { isApprovedWork } from '@/lib/types';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -59,7 +60,8 @@ const STATUS_COLOR: Record<string, string> = {
   'Needs Revision':           'var(--red)',
   'Resubmission Requested':   'var(--red)',
   'Approved':                 'var(--moss)',
-  'Portfolio Ready':          '#047857',
+  'Capstone Ready':           '#047857',
+  'Portfolio Ready':          '#047857', // legacy, display only — see lib/types.ts
 };
 
 const STATUS_BG: Record<string, string> = {
@@ -72,7 +74,8 @@ const STATUS_BG: Record<string, string> = {
   'Needs Revision':           'rgba(179,56,44,0.08)',
   'Resubmission Requested':   'rgba(179,56,44,0.08)',
   'Approved':                 'rgba(5,150,105,0.08)',
-  'Portfolio Ready':          'rgba(4,120,87,0.1)',
+  'Capstone Ready':           'rgba(4,120,87,0.1)',
+  'Portfolio Ready':          'rgba(4,120,87,0.1)', // legacy, display only
 };
 
 // ── Page ──────────────────────────────────────────────────────
@@ -148,7 +151,7 @@ export default async function AssignmentsPage() {
 
   // ── Stats ──────────────────────────────────────────────────
   const submitted     = assignments.filter(a => a.status !== 'Not Started').length;
-  const approved      = assignments.filter(a => a.status === 'Approved' || a.status === 'Portfolio Ready' || a.portfolio_approved).length;
+  const approved      = assignments.filter(isApprovedWork).length;
   const pendingFb     = assignments.filter(a => a.status === 'Submitted' || a.status === 'AI Reviewed').length;
   const needsResub    = assignments.filter(a => a.status === 'Resubmission Requested').length;
 
@@ -233,7 +236,7 @@ export default async function AssignmentsPage() {
             const aDeliv  = pathway === 'PM' ? week.pm_deliverable        : week.ba_deliverable;
             const myAssign = getAssignment(week.week_number);
             const status   = myAssign?.status || 'Not Started';
-            const isApproved = status === 'Approved' || status === 'Portfolio Ready' || myAssign?.portfolio_approved;
+            const isApproved = isApprovedWork(myAssign) || status === 'Approved' || status === 'Capstone Ready';
             const isOverdue  = aDue && new Date(aDue) < new Date() && !myAssign?.submission_url;
 
             return (

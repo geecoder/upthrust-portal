@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase';
 import Link from 'next/link';
 import type { Learner, Assignment, Week, Announcement, Notification } from '@/lib/types';
-import { PASSPORT_CRITERIA, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG, RISK_COLOR, PHASE_COLORS } from '@/lib/types';
+import { PASSPORT_CRITERIA, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG, RISK_COLOR, PHASE_COLORS, isApprovedWork } from '@/lib/types';
 import { getModuleAccess } from '@/lib/module-access';
 
 function ProgressRing({ pct, color = 'var(--amber)', size = 80, stroke = 7 }: { pct: number; color?: string; size?: number; stroke?: number }) {
@@ -88,7 +88,7 @@ export default async function DashboardPage() {
   const thisWeekAssignment = typedAssignments.find(a => a.week_number === currentWeek && a.pathway === pathway);
 
   const submittedCount = typedAssignments.filter(a => a.status !== 'Not Started').length;
-  const approvedCount = typedAssignments.filter(a => a.status === 'Approved' || a.status === 'Portfolio Ready' || a.portfolio_approved).length;
+  const approvedCount = typedAssignments.filter(isApprovedWork).length;
   const pendingFeedback = typedAssignments.filter(a => a.feedback && !a.feedback).length;
   const newFeedback = typedAssignments.filter(a => a.feedback_at && new Date(a.feedback_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
 
   const quickLinks = [
     { href: '/portal/assignments', label: '📝 My Assignments', sub: `${submittedCount} submitted`, on: true },
-    { href: '/portal/portfolio', label: '💼 My Portfolio', sub: `${approvedCount} items`, on: true },
+    { href: '/portal/capstone', label: '🎓 Capstone', sub: `${approvedCount} approved`, on: access.capstone },
     { href: '/portal/community', label: '💬 Community', sub: 'Ask questions, share wins', on: access.community },
     { href: '/portal/resources', label: '📚 Resources & Templates', sub: 'Find templates by week', on: true },
   ].filter(l => l.on);
@@ -120,8 +120,8 @@ export default async function DashboardPage() {
       return { label: 'You have assignments needing resubmission', href: '/portal/assignments', icon: '↩', urgent: true };
     if (newFeedback.length > 0)
       return { label: `Read new feedback on ${newFeedback.length} assignment${newFeedback.length > 1 ? 's' : ''}`, href: '/portal/assignments', icon: '💬', urgent: false };
-    if (approvedCount < PASSPORT_CRITERIA.portfolio_items_min)
-      return { label: `Add approved work to portfolio (${approvedCount}/${PASSPORT_CRITERIA.portfolio_items_min} needed)`, href: '/portal/portfolio', icon: '💼', urgent: false };
+    if (approvedCount < PASSPORT_CRITERIA.capstone_artefacts_min)
+      return { label: `Get more work approved (${approvedCount}/${PASSPORT_CRITERIA.capstone_artefacts_min} needed)`, href: '/portal/capstone', icon: '🎓', urgent: false };
     return { label: 'Review this week\'s content', href: `/portal/week/${currentWeek}`, icon: '📅', urgent: false };
   }
 
@@ -133,7 +133,7 @@ export default async function DashboardPage() {
     { label: `Assignments ≥${PASSPORT_CRITERIA.assignment_submission_min}%`, met: (typedLearner.assignment_completion_pct || 0) >= PASSPORT_CRITERIA.assignment_submission_min, value: `${typedLearner.assignment_completion_pct || 0}%` },
     { label: `Avg score ≥${PASSPORT_CRITERIA.avg_score_min}`, met: (typedLearner.avg_score || 0) >= PASSPORT_CRITERIA.avg_score_min, value: typedLearner.avg_score ? `${typedLearner.avg_score}/100` : '—' },
     { label: 'Capstone submitted', met: typedLearner.capstone_status !== 'Not Started', value: typedLearner.capstone_status },
-    { label: `≥${PASSPORT_CRITERIA.portfolio_items_min} portfolio items`, met: approvedCount >= PASSPORT_CRITERIA.portfolio_items_min, value: `${approvedCount}` },
+    { label: `≥${PASSPORT_CRITERIA.capstone_artefacts_min} approved artefacts`, met: approvedCount >= PASSPORT_CRITERIA.capstone_artefacts_min, value: `${approvedCount}` },
   ];
   const passportMet = passportChecks.filter(c => c.met).length;
 
@@ -198,7 +198,7 @@ export default async function DashboardPage() {
           { label: 'Assignments Submitted', value: `${submittedCount}/${currentWeek + 1}`, sub: `${Math.round((submittedCount / Math.max(currentWeek + 1, 1)) * 100)}% this far`, color: 'var(--ink)' },
           { label: 'Average Score', value: typedLearner.avg_score ? `${typedLearner.avg_score}` : '—', sub: 'out of 100', color: (typedLearner.avg_score || 0) >= 70 ? 'var(--moss)' : 'var(--amber-deep)' },
           { label: 'Attendance', value: `${typedLearner.attendance_pct || 0}%`, sub: '75% required', color: (typedLearner.attendance_pct || 0) >= 75 ? 'var(--moss)' : 'var(--amber-deep)' },
-          { label: 'Portfolio Items', value: `${approvedCount}`, sub: `of ${PASSPORT_CRITERIA.portfolio_items_min} required`, color: approvedCount >= PASSPORT_CRITERIA.portfolio_items_min ? 'var(--moss)' : 'var(--amber)' },
+          { label: 'Approved Artefacts', value: `${approvedCount}`, sub: `of ${PASSPORT_CRITERIA.capstone_artefacts_min} required`, color: approvedCount >= PASSPORT_CRITERIA.capstone_artefacts_min ? 'var(--moss)' : 'var(--amber)' },
         ].map(stat => (
           <div key={stat.label} className="card" style={{ textAlign: 'center', padding: '18px 14px' }}>
             <p style={{ fontFamily: 'Fraunces, serif', fontSize: '2rem', fontWeight: 500, color: stat.color, lineHeight: 1 }}>{stat.value}</p>
@@ -239,7 +239,7 @@ export default async function DashboardPage() {
               )}
 
               {/* Assignment status */}
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', background: thisWeekAssignment?.status === 'Approved' || thisWeekAssignment?.status === 'Portfolio Ready' ? 'rgba(5,150,105,0.06)' : thisWeekAssignment?.status === 'Resubmission Requested' ? 'rgba(220,38,38,0.06)' : 'var(--paper-soft)', borderRadius: 6 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', background: isApprovedWork(thisWeekAssignment) ? 'rgba(5,150,105,0.06)' : thisWeekAssignment?.status === 'Resubmission Requested' ? 'rgba(220,38,38,0.06)' : 'var(--paper-soft)', borderRadius: 6 }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-muted)', marginBottom: 4 }}>
                     {pathway} Assignment: {pathway === 'PM' ? thisWeek.pm_assignment_title : thisWeek.ba_assignment_title}
@@ -311,7 +311,7 @@ export default async function DashboardPage() {
                       Wk {w.week_number} · {w.title}
                     </span>
                     <span style={{ fontSize: '0.6875rem', fontWeight: 600 }}>
-                      {weekAssign?.status === 'Approved' || weekAssign?.status === 'Portfolio Ready' ? '✓' :
+                      {isApprovedWork(weekAssign) ? '✓' :
                        weekAssign?.status === 'Submitted' || weekAssign?.status === 'AI Reviewed' ? '⏳' :
                        weekAssign?.status === 'Resubmission Requested' ? '↩' :
                        isCurrent ? <span style={{ color: 'var(--amber-deep)' }}>NOW</span> : ''}

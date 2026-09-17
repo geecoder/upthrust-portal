@@ -4,7 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase';
 import type { Learner, Assignment, Attendance, CapabilityScore } from '@/lib/types';
-import { RISK_COLOR, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG } from '@/lib/types';
+import { RISK_COLOR, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG, isApprovedWork } from '@/lib/types';
 import Link from 'next/link';
 import ClerkLinkForm from './ClerkLinkForm';
 import PathwayEditor from './PathwayEditor';
@@ -31,7 +31,7 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
   const typedCapScores = (capScores || []) as CapabilityScore[];
 
   const submitted = typedAssignments.filter(a => a.status !== 'Not Started').length;
-  const approved = typedAssignments.filter(a => a.status === 'Approved' || a.status === 'Portfolio Ready' || a.portfolio_approved).length;
+  const approved = typedAssignments.filter(isApprovedWork).length;
   const withFeedback = typedAssignments.filter(a => a.feedback).length;
 
   return (

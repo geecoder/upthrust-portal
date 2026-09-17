@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import type { Learner, Assignment, CapabilityScore } from '@/lib/types';
-import { PASSPORT_CRITERIA, PROGRAM, CAPABILITY_AREAS } from '@/lib/types';
+import { PASSPORT_CRITERIA, PROGRAM, CAPABILITY_AREAS, isApprovedWork } from '@/lib/types';
 import Link from 'next/link';
 
 const CAPABILITY_ASSIGNMENT_MAP: Record<string, string[]> = {
@@ -24,7 +24,8 @@ const LEVEL_COLOR: Record<string, string> = {
   'Emerging': 'var(--amber-deep)',
   'Developing': '#2563EB',
   'Competent': 'var(--moss)',
-  'Portfolio Ready': '#047857',
+  'Capstone Ready': '#047857',
+  'Portfolio Ready': '#047857', // legacy level name, display only
 };
 
 const LEVEL_BG: Record<string, string> = {
@@ -32,10 +33,11 @@ const LEVEL_BG: Record<string, string> = {
   'Emerging': 'rgba(217,119,6,0.1)',
   'Developing': 'rgba(37,99,235,0.1)',
   'Competent': 'rgba(5,150,105,0.1)',
-  'Portfolio Ready': 'rgba(4,120,87,0.12)',
+  'Capstone Ready': 'rgba(4,120,87,0.12)',
+  'Portfolio Ready': 'rgba(4,120,87,0.12)', // legacy level name, display only
 };
 
-const LEVEL_ORDER = ['Not Started', 'Emerging', 'Developing', 'Competent', 'Portfolio Ready'];
+const LEVEL_ORDER = ['Not Started', 'Emerging', 'Developing', 'Competent', 'Capstone Ready'];
 
 export default async function PassportPage() {
   const { userId } = await auth();
@@ -54,7 +56,7 @@ export default async function PassportPage() {
   const typedCapScores = (capScores || []) as CapabilityScore[];
 
   const approvedCount = typedAssignments.filter(a =>
-    a.status === 'Approved' || a.status === 'Portfolio Ready' || a.portfolio_approved
+    isApprovedWork(a)
   ).length;
   const submittedCount = typedAssignments.filter(a => a.status !== 'Not Started').length;
   const totalExpected = 13;
@@ -64,7 +66,7 @@ export default async function PassportPage() {
     { label: `Assignments Submitted ≥${PASSPORT_CRITERIA.assignment_submission_min}%`, target: 80, actual: typedLearner.assignment_completion_pct || 0, met: (typedLearner.assignment_completion_pct || 0) >= PASSPORT_CRITERIA.assignment_submission_min, unit: '%', detail: `${submittedCount} of ${totalExpected} submitted` },
     { label: `Average Score ≥${PASSPORT_CRITERIA.avg_score_min}/100`, target: 70, actual: typedLearner.avg_score || 0, met: (typedLearner.avg_score || 0) >= PASSPORT_CRITERIA.avg_score_min, unit: '/100', detail: 'Based on Genesis-reviewed submissions' },
     { label: 'Capstone Submitted & Presented', target: 1, actual: typedLearner.capstone_status !== 'Not Started' ? 1 : 0, met: typedLearner.capstone_status !== 'Not Started', unit: '', detail: 'Week 12 Demo Day' },
-    { label: `≥${PASSPORT_CRITERIA.portfolio_items_min} Portfolio Items Approved`, target: 8, actual: approvedCount, met: approvedCount >= PASSPORT_CRITERIA.portfolio_items_min, unit: '', detail: `${approvedCount} of 8 required` },
+    { label: `≥${PASSPORT_CRITERIA.capstone_artefacts_min} Artefacts Approved`, target: 8, actual: approvedCount, met: approvedCount >= PASSPORT_CRITERIA.capstone_artefacts_min, unit: '', detail: `${approvedCount} of 8 required` },
   ] : [];
 
   const metCount = criteria.filter(c => c.met).length;
@@ -252,8 +254,8 @@ export default async function PassportPage() {
             </div>
           )}
 
-          <Link href="/portal/portfolio" className="btn btn-outline" style={{ display: 'block', textAlign: 'center' }}>
-            View My Portfolio →
+          <Link href="/portal/capstone" className="btn btn-outline" style={{ display: 'block', textAlign: 'center' }}>
+            View Capstone →
           </Link>
         </div>
       </div>

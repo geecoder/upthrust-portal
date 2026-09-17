@@ -4,7 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 import type { Learner, Assignment } from '@/lib/types';
-import { PASSPORT_CRITERIA } from '@/lib/types';
+import { PASSPORT_CRITERIA, isCapstoneReady } from '@/lib/types';
 
 // Generate the HTML for the passport (rendered to PDF via browser print)
 function generatePassportHTML(
@@ -13,7 +13,7 @@ function generatePassportHTML(
   capstoneNote: string
 ): string {
   const approvedCount = assignments.filter(a =>
-    a.status === 'Approved' || a.status === 'Portfolio Ready'
+    a.status === 'Approved' || isCapstoneReady(a.status)
   ).length;
 
   const avgScore = learner.avg_score || 0;

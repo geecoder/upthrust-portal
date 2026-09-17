@@ -96,10 +96,10 @@ Not fixed here: it is a real defect but not launch-blocking for week 1 of a coho
 
 Not fixed here: the brief scopes this run to F-12/13/14/16/19 plus schema truth. **This is the one deferred item I would argue for pulling forward** — it is a real security defect with a small, contained fix (escape before replacing), and it is not entangled with the rebuild.
 
-### D-15 · F-33 — portfolio add is permanently broken
-`app/api/admin/data/route.ts:96` writes `submitted_at`, which `portfolio_items` does not have. Production has **0 rows** in that table, consistent with every insert having always failed. Learners see an `alert()`.
+### D-15 · F-33 — portfolio add is permanently broken — **FIXED in Milestone 4**
+`app/api/admin/data/route.ts` wrote `submitted_at`, which `portfolio_items` does not have. Production has **0 rows** in that table, consistent with every insert having always failed. Learners saw an `alert()`.
 
-Not fixed here: not on the task list. One-line fix (drop the field from the insert) — worth doing before Cohort 2 if portfolio building starts early.
+**Fixed**: the field is dropped from the insert; `created_at` has a column default and was the timestamp actually wanted. The learner-facing surface moved to `/portal/capstone` in the same milestone, where the add form reports failures in the page instead of in an `alert()`. See also D-23 — the page this was reached from had never worked either, so the broken insert was never actually reachable.
 
 ### D-16 · F-40 — `.eq('enrollment_status', 'Active')` in three places
 `app/api/notify/route.ts:274`, `app/admin/page.tsx:43`, `app/admin/learners/page.tsx:18`. Excludes `Pending` learners from session reminders and admin counts. Currently harmless — all 7 production learners are `Active`, and production's column default is `'Active'` (not `'Pending'` as the repo file claims). Becomes live the moment a Cohort 2 learner is created via the webhook, which writes `'Pending'` explicitly.
@@ -125,3 +125,15 @@ Both learner-facing notification reads go through the **browser (anon) Supabase 
 So: the badge has always read zero, the notifications page has always been empty, and mark-as-read has always been a no-op. The 50 rows in production have never been delivered to anyone. Admin-side notification creation (`app/api/admin/data/route.ts:275,290,309`) uses the service-role client and does work — it has been writing rows into a table nothing could read.
 
 Not fixed here: Milestone 2 removes notifications from the learner experience, so fixing the read path would be work spent on a module being switched off. **Whoever turns `notifications` back on from `/admin/modules` must fix this first, or they will ship an empty screen.** The fix is to move both reads behind a server route that uses the service-role client and filters by the signed-in learner — the same shape as `/api/admin/data` — not to loosen the RLS policy.
+
+### D-23 · The Portfolio page had never worked either — **found during Milestone 4, now retired**
+`app/portal/portfolio/page.tsx` opened by reading `learners` through the **browser anon client**, then `if (!l) return`. RLS shows the anon key **0 of 7** learner rows (`docs/SCHEMA_DRIFT.md` §4), so that early return fired on every load for every learner: no artefacts, no assignments, nothing. The page rendered its header and an empty state, always.
+
+This is the same root cause as D-22 and it means the broken insert in D-15 was never reachable from the UI — two defects stacked, which is why neither was noticed.
+
+**Not deferred, resolved**: M4 replaced this surface with `/portal/capstone`, a server component that reads with the service-role client. `/portal/portfolio` is now a redirect. Logged here because the *pattern* is the finding: **every remaining learner page that reads learner-scoped data from the browser is in this condition.** The ones left are `app/portal/community/page.tsx`, `app/portal/notifications/page.tsx` and `app/portal/profile/page.tsx`. Community and Notifications are switched off as of M2; **profile is not**, and is worth checking before Cohort 2.
+
+### D-24 · `capability_scores.level` holds a value its own type forbids — **found during Milestone 4**
+Live data is `'Advanced'` x11 and `'Not Started'` x30. The `CapabilityLevel` type permits `'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Capstone Ready'` — **`'Advanced'` is not in it**, and the column has no CHECK constraint to have caught that. `LEVEL_ORDER` on the passport page does not contain it either, so those 11 rows sort as unknown wherever level ordering is used.
+
+Not fixed in M4: migration 0004 renames the assignment status only. Renaming a level value that no row holds would have been a no-op dressed up as a migration, and deciding what `'Advanced'` should map to is a curriculum question for the owner, not a code one. It belongs with the M6 rebuild, where `capability_scores` is being reconsidered anyway.

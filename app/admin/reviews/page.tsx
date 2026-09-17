@@ -41,7 +41,7 @@ export default function AdminReviewsPage() {
     return a.status !== 'Not Started';
   });
 
-  async function submitFeedback(status: 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Portfolio Ready') {
+  async function submitFeedback(status: 'Human Reviewed' | 'Resubmission Requested' | 'Approved' | 'Capstone Ready') {
     if (!selected) return;
     setSaving(true);
     const res = await fetch('/api/admin/data', {
@@ -231,7 +231,7 @@ export default function AdminReviewsPage() {
                   dangerouslySetInnerHTML={{ __html: selected.ai_feedback.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
                 />
                 {selected.ai_quality_rating && (
-                  <div style={{ marginTop: 12, display: 'inline-block', padding: '4px 10px', borderRadius: 100, background: selected.ai_quality_rating === 'Portfolio Ready' ? 'rgba(5,150,105,0.1)' : selected.ai_quality_rating === 'Good' ? 'rgba(37,99,235,0.1)' : 'rgba(217,119,6,0.1)', color: selected.ai_quality_rating === 'Portfolio Ready' ? 'var(--moss)' : selected.ai_quality_rating === 'Good' ? '#1D4ED8' : 'var(--amber-deep)', fontSize: '0.75rem', fontWeight: 700 }}>
+                  <div style={{ marginTop: 12, display: 'inline-block', padding: '4px 10px', borderRadius: 100, background: selected.ai_quality_rating === 'Capstone Ready' ? 'rgba(5,150,105,0.1)' : selected.ai_quality_rating === 'Good' ? 'rgba(37,99,235,0.1)' : 'rgba(217,119,6,0.1)', color: selected.ai_quality_rating === 'Capstone Ready' ? 'var(--moss)' : selected.ai_quality_rating === 'Good' ? '#1D4ED8' : 'var(--amber-deep)', fontSize: '0.75rem', fontWeight: 700 }}>
                     AI Rating: {selected.ai_quality_rating}
                   </div>
                 )}
@@ -281,9 +281,9 @@ export default function AdminReviewsPage() {
                   className="btn btn-primary" style={{ background: 'var(--moss)' }}>
                   ✓ Approve
                 </button>
-                <button onClick={() => submitFeedback('Portfolio Ready')} disabled={!feedback || saving}
+                <button onClick={() => submitFeedback('Capstone Ready')} disabled={!feedback || saving}
                   className="btn btn-primary" style={{ background: 'var(--amber-deep)' }}>
-                  ⭐ Approve + Portfolio Ready
+                  ⭐ Approve + Capstone Ready
                 </button>
                 <button onClick={() => submitFeedback('Resubmission Requested')} disabled={!feedback || saving}
                   className="btn btn-outline">

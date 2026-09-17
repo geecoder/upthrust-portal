@@ -52,9 +52,9 @@ function read(relPath: string): string {
 // somebody has to update is better than a check that quietly covers less than
 // it used to.
 //
-// `page: null` means the module has no route yet. Capstone is the only one:
-// Milestone 4 builds it, and section 2 starts demanding its gate the moment the
-// directory appears.
+// `page: null` means the module has no route yet. Nothing uses it now that
+// Capstone exists; it stays because section 2 needs a way to say "no route yet,
+// and shout the moment one appears".
 // ─────────────────────────────────────────────────────────────────────────────
 interface Surface {
   /** Directory under app/portal that must carry the gate, or null if none yet. */
@@ -64,7 +64,7 @@ interface Surface {
 }
 
 const SURFACES: Record<ModuleKey, Surface> = {
-  capstone: { page: null, api: [] },
+  capstone: { page: 'capstone', api: [] },
   notifications: { page: 'notifications', api: [] },
   community: { page: 'community', api: [] },
   'ai_lab.stakeholder_sim': { page: 'simulation', api: ['app/api/simulation/route.ts'] },
@@ -94,6 +94,19 @@ for (const key of MODULE_KEYS) {
   check(`  gates on '${key}'`, layout.includes(`gateModule('${key}')`), 'layout does not call gateModule with this key');
   check('  refuses rather than renders', /if \(!gate\.allowed\)/.test(layout));
   check('  is not statically cached', layout.includes("export const dynamic = 'force-dynamic'"));
+
+  // The gate must refuse the way the registry says it does. A module declared
+  // 'locked' that quietly redirects, or an 'absent' one that renders a teaser,
+  // is a screen the admin console is describing wrongly.
+  const presentation = MODULE_REGISTRY[key]?.presentation;
+  const redirects = layout.includes("redirect('/portal')");
+  const rendersLocked = /<LockedModule[\s/>]/.test(layout);
+  if (presentation === 'absent') {
+    check("  'absent' redirects to the dashboard", redirects && !rendersLocked);
+  } else {
+    check("  'locked' renders a locked screen, never redirects", rendersLocked && !redirects);
+    check('  admin override is visible, not silent', /adminOverride/.test(layout));
+  }
 }
 
 console.log('\n3. Every route handler of a gated module refuses when it is off');
@@ -168,6 +181,10 @@ console.log('\n5. The sidebar filters on the registry, not on hardcoded labels')
     const byFlag = sidebar.includes(`access?.${key} === true`) || sidebar.includes(`access.${key} === true`);
     check(`${key} governs its sidebar item`, byNavItem || byFlag);
   }
+  // The filter must read the registry, not name capstone. Hardcoding the one
+  // 'locked' module here is how the sidebar and the gate start disagreeing.
+  check('filter reads presentation from the registry', sidebar.includes("presentation === 'locked'"));
+  check('  no hardcoded capstone special case', !/'capstone'\s*===|===\s*'capstone'/.test(sidebar));
 }
 
 console.log('\n6. The dashboard gates the module surfaces it renders itself');
@@ -178,12 +195,47 @@ console.log('\n6. The dashboard gates the module surfaces it renders itself');
   check('app/portal/page.tsx resolves access', dash.includes('getModuleAccess('));
   check('  notifications are not even queried when off', /access\.notifications\s*\n?\s*\?/.test(dash));
   check('  community quick link is gated', dash.includes('on: access.community'));
+  check('  capstone quick link is gated', dash.includes('on: access.capstone'));
+  check('  no link to the retired portfolio route', !dash.includes("'/portal/portfolio'"));
   for (const key of ['ai_lab.stakeholder_sim', 'ai_lab.writing_checker', 'ai_lab.interview_coach'] as const) {
     check(`  ${key} card is gated`, dash.includes(`on: access['${key}']`));
   }
 }
 
-console.log('\n7. Every module states what a learner sees when it is off');
+console.log('\n7. The retired Portfolio route still resolves');
+{
+  // M4 replaced Portfolio with Capstone. The old path is in learner history and
+  // in onboarding copy, so it must redirect rather than 404 — and it must not
+  // be re-implemented as a second copy of the page.
+  const retired = read('app/portal/portfolio/page.tsx');
+  check('app/portal/portfolio/page.tsx exists as a redirect', retired.includes("redirect('/portal/capstone')"));
+  check('  it does not read the database', !/from\('(learners|portfolio_items|assignments)'\)/.test(retired));
+  check('  nothing else links to it', !read('components/Sidebar.tsx').includes("href: '/portal/portfolio'"));
+}
+
+console.log('\n8. The renamed status vocabulary is consistent');
+{
+  // Migration 0004 renames 'Portfolio Ready' to 'Capstone Ready'. Reads must
+  // tolerate the old value until it is applied; writes must never produce it.
+  const types = read('lib/types.ts');
+  check('AssignmentStatus no longer permits the old value', !/\| 'Portfolio Ready'/.test(types));
+  check('the legacy value is named once, for reads', types.includes("LEGACY_CAPSTONE_READY = 'Portfolio Ready'"));
+  check('isApprovedWork is the shared predicate', types.includes('export function isApprovedWork('));
+
+  // The admin review queue is the only writer of this status.
+  const reviews = read('app/admin/reviews/page.tsx');
+  check('the review queue writes the new value', reviews.includes("submitFeedback('Capstone Ready')"));
+  check('  and cannot write the old one', !reviews.includes("submitFeedback('Portfolio Ready')"));
+
+  // The migration must actually move the rows and rebuild the CHECK.
+  const mig = read('supabase/migrations/0004_capstone_status_rename.sql');
+  check('migration 0004 exists', mig.length > 0);
+  check('  it updates the rows', /UPDATE public\.assignments/i.test(mig) && mig.includes("'Capstone Ready'"));
+  check('  it rebuilds the CHECK', /ADD CONSTRAINT assignments_status_check/i.test(mig));
+  check('  it verifies before committing', /still hold the old status/.test(mig));
+}
+
+console.log('\n9. Every module states what a learner sees when it is off');
 for (const key of MODULE_KEYS) {
   const meta = MODULE_REGISTRY[key];
   check(`${key} has whenOff copy`, !!meta?.whenOff && meta.whenOff.length > 20);
