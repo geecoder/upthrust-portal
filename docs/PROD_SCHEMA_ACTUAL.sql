@@ -377,3 +377,74 @@ CREATE TABLE public.passports (
 -- OBSERVED VALUES passports.pathway: 'BA' x1
 -- OBSERVED VALUES passports.track: 'PM' x1
 -- OBSERVED VALUES passports.cohort: 'Cohort 1' x1
+
+
+-- =============================================================================
+-- RECAPTURE — 2026-09-17 · branch feat/learner-surface-rework
+-- =============================================================================
+-- Method identical to the 2026-09-12 capture: read-only over PostgREST, HTTP
+-- GET/HEAD only, service-role and anon keys. No SQL executed. No writes.
+--
+-- The schema above was re-verified column-for-column and is UNCHANGED, with one
+-- addition and one correction recorded below. Full narrative and the answers to
+-- the three Milestone 0 confirmations are in docs/SCHEMA_DRIFT.md, "ADDENDUM —
+-- Milestone 0 recapture, 2026-09-17".
+-- =============================================================================
+
+-- ── NEW: app_settings is ABSENT from production ──────────────────────────────
+-- GET /rest/v1/app_settings -> HTTP 404 PGRST205
+--   "Could not find the table 'public.app_settings' in the schema cache"
+--
+-- supabase/migrations/0002_app_settings.sql declares this table and says
+-- "RUN THIS MANUALLY in the Supabase SQL Editor". It was never run.
+-- Migration 0001 is presumed unrun for the same reason (it alters only a CHECK
+-- constraint, which is not readable over PostgREST, so it cannot be confirmed).
+--
+-- Both migrations remain PENDING and must be applied before any migration added
+-- on this branch.
+
+-- ── CORRECTION: capability_scores has no `pathway` column ────────────────────
+-- Probing capability_scores.pathway returns 42703 "column does not exist".
+-- The table list above is correct; this note exists only because audit finding
+-- F-1 is phrased as "pathway CHECK constraints on every table", which implies a
+-- pathway column exists more widely than it does. It exists on exactly three
+-- tables: learners, assignments, passports.
+
+-- ── ROW COUNTS — 2026-09-17 (service role) ───────────────────────────────────
+-- learners               7      community_posts        1
+-- assignments           25      community_replies      0
+-- attendance            62      resources             84   (anon sees 64)
+-- capability_scores     41      weeks                 13   (anon sees 13)
+-- notifications         50      portfolio_items        0
+-- passports              1      announcements          0
+-- sessions               7      ai_practice_attempts   0   (anon sees 7 on sessions)
+-- app_settings       ABSENT
+--
+-- Identical to 2026-09-12 on every table. Production has not been written to in
+-- five days.
+
+-- ── OBSERVED VALUES refreshed ────────────────────────────────────────────────
+-- learners.pathway      : 'BA' x5, 'PM' x2
+-- assignments.pathway   : 'BA' x24, 'PM' x1
+-- passports.pathway     : 'BA' x1        (passports.track = 'PM' on that row)
+-- assignments.status    : 'Approved' x12, 'Portfolio Ready' x12,
+--                         'Needs Revision' x1
+-- assignments.week_number in use: 0,1,2,3,5,6,7,8   (week 4 has no rows)
+-- weeks.is_published    : true x13
+-- weeks.lab_exercise    : populated on 0 of 13 rows   (confirms F-5)
+--
+-- assignments uniqueness, empirical: 25 rows, 25 distinct
+-- (learner_id, week_number, pathway) triples, 0 duplicates. CONSISTENT WITH
+-- UNIQUE(learner_id, week_number, pathway) but NOT PROOF of it — see
+-- docs/SCHEMA_DRIFT.md A3(a).
+
+-- ── STILL NOT OBTAINED ───────────────────────────────────────────────────────
+-- CHECK constraint definitions, UNIQUE constraint definitions, constraint names,
+-- RLS policy definitions, RLS enabled/disabled per table, indexes, triggers,
+-- functions.
+--
+-- No route to these exists from this environment: PostgREST cannot expose
+-- pg_catalog, the project has no SQL-executing RPC, there is no Postgres
+-- connection string in the environment, and psql is not installed.
+-- Run docs/INTROSPECT.sql in the Supabase SQL Editor to close the gap.
+-- =============================================================================

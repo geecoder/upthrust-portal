@@ -159,3 +159,111 @@ Production week titles:
 They are not a schema definition. They are four historical scripts, partially applied, in unknown order, superseded by undocumented dashboard edits.
 
 `supabase/migrations/0000_baseline.sql` now records the observed state as the starting point of a real ledger. The four root files should be treated as read-only history and never re-run. **`supabase-weeks-seed.sql` is actively dangerous** (§6) — Task 6 addresses it.
+
+---
+
+# ADDENDUM — Milestone 0 recapture, 2026-09-17
+
+**Branch:** `feat/learner-surface-rework` · **Method:** identical to the original capture — read-only over PostgREST, HTTP GET/HEAD only, service-role and anon keys. No SQL executed. No writes.
+
+Everything in sections 1–7 above was re-verified and still holds, with the exceptions and additions below.
+
+## A1. `app_settings` does not exist in production — migration 0002 was never run
+
+`GET /rest/v1/app_settings` returns **HTTP 404 `PGRST205` — "Could not find the table 'public.app_settings' in the schema cache"**.
+
+`supabase/migrations/0002_app_settings.sql` was written on the previous branch and carries the instruction *"RUN THIS MANUALLY in the Supabase SQL Editor."* **That has not happened.** The consequence today:
+
+- `getActiveCohort()` (`lib/cohort.ts:44`) takes its error branch on every call, logs `[cohort] app_settings lookup failed`, and falls through to `process.env.ACTIVE_COHORT` (not set in `.env.local`) and then to the `DEFAULT_COHORT` constant, `'Cohort 1'`.
+- Net effect: F-12 is **fixed in code but not in production.** Cohort 2 starts 2026-09-26. Until 0002 is run, every learner enrolling after that date is still stamped `Cohort 1`.
+
+**Migration 0001 is presumed unrun for the same reason.** It cannot be verified read-only — it only alters a CHECK constraint, which PostgREST cannot expose. Since 0002 demonstrably did not run, the safe assumption is that neither did.
+
+**Both are still pending and must be run before any migration this branch adds.** Run order is given at each review gate.
+
+## A2. Row counts — 2026-09-17 vs 2026-09-12
+
+| Table | 09-12 | 09-17 | Anon visibility |
+|---|---:|---:|---|
+| `learners` | 7 | **7** | 0 — RLS blocking |
+| `assignments` | 25 | **25** | 0 — RLS blocking |
+| `attendance` | 62 | **62** | 0 — RLS blocking |
+| `capability_scores` | 41 | **41** | 0 — RLS blocking |
+| `notifications` | 50 | **50** | 0 — RLS blocking |
+| `passports` | 1 | **1** | 0 — RLS blocking |
+| `community_posts` | 1 | **1** | 1 — public by policy |
+| `community_replies` | 0 | **0** | 0 — indeterminate (empty) |
+| `resources` | 84 | **84** | 64 — `is_active = TRUE` policy |
+| `weeks` | 13 | **13** | 13 — all published |
+| `portfolio_items` | 0 | **0** | 0 — indeterminate (empty) |
+| `announcements` | 0 | **0** | 0 — indeterminate (empty) |
+| `ai_practice_attempts` | 0 | **0** | 0 — indeterminate (empty) |
+| `sessions` | 7 | **7** | **7 — no RLS.** Still exposed |
+| `app_settings` | — | **absent** | 404 |
+
+**Production is static.** Nothing has been written in five days. `sessions` remains readable by anyone holding the anon key — unchanged, still out of scope, still logged in `docs/DEFERRED.md`.
+
+## A3. Milestone 0 item 4 — the three specific confirmations
+
+### (a) The exact definition of the `assignments` uniqueness constraint — NOT ESTABLISHED
+
+This cannot be read with the access available. PostgREST cannot expose `pg_constraint`, the project has no RPC that runs SQL, there is no direct Postgres connection string in the environment, and `psql` is not installed. The only route is the owner running `docs/INTROSPECT.sql` query 1.
+
+**What I established instead, empirically and read-only:** all 25 `assignments` rows are distinct on `(learner_id, week_number, pathway)` — 25 rows, 25 distinct triples, **0 duplicates**.
+
+This is *consistent* with `UNIQUE(learner_id, week_number, pathway)` but **does not prove it.** With only 7 learners and 25 rows, the absence of a duplicate is equally explained by nobody having tried to create one. Treat F-6 as unconfirmed-but-likely.
+
+**Why this matters for Milestone 6a:** F-6 claims a learner structurally cannot hold two options for one week. If the constraint exists, the new lab model needs its own option dimension in new tables — which is the plan regardless. **So Milestone 6a is not blocked by this gap**: building new tables with an explicit option dimension is correct whether or not the old constraint exists. The gap only matters if someone later tries to extend `assignments` in place, which this brief forbids anyway.
+
+### (b) `pathway` CHECK constraints on every table and their permitted values — PARTIALLY ESTABLISHED
+
+Constraint *definitions* are unreadable for the same reason. Values actually present:
+
+| Table | Has `pathway`? | Values observed | Count |
+|---|---|---|---|
+| `learners` | yes | `BA`, `PM` | 5 BA, 2 PM |
+| `assignments` | yes | `BA`, `PM` | 24 BA, 1 PM |
+| `passports` | yes | `BA` | 1 |
+| `capability_scores` | **no** | — | column does not exist (`42703`) |
+| `weeks` | **no** | — | pathway is modelled as `pm_*`/`ba_*` column pairs |
+
+An observed value proves the constraint permits it. It proves nothing about what the constraint forbids. F-1 claims a two-value CHECK on `assignments.pathway`; the observed data is consistent with that and I could not falsify it.
+
+**Note `capability_scores` has no `pathway` column** — `docs/PROD_SCHEMA_ACTUAL.sql` is correct on this; I am recording it because the audit's F-1 phrasing ("every table") implies otherwise.
+
+**Why this matters for Milestone 6a:** OKAVA covers four pathways. The new tables must carry pathway as a **foreign key to a seeded pathway table, with no CHECK constraint** — per ground rule 4, new code must not add to the hardcoding. That design is correct independently of what the old CHECK says, so **6a is not blocked** by this gap either.
+
+### (c) Has `passports` ever held a row? — ESTABLISHED: yes. One, right now.
+
+| Field | Value |
+|---|---|
+| `passport_id` | `UPT-PM-C1-2026-001` |
+| `pathway` | `BA` |
+| `track` | **`PM`** — contradicts `pathway` |
+| `status` | `issued` |
+| `overall_score` | **`0`** |
+| `issued_at` | `2026-06-03` |
+
+Unchanged since 09-12 and still internally inconsistent, for the three reasons set out in section 5 above. Commit `c0794f7` on the previous branch made `/verify` public, so **this row is now publicly readable at `/verify/UPT-PM-C1-2026-001`** and renders as a valid issued credential showing a score of 0 and a PM identifier for a BA learner.
+
+**This is the highest-priority item in this document that is not in this brief's scope.** Milestone 5 displays passport progress and explicitly does not wire issuance, so nothing I build this run will correct or overwrite this row. Recommend the owner corrects or revokes it directly. Logged in `docs/DEFERRED.md`.
+
+## A4. Additional facts captured for Milestone 6
+
+- **`weeks.lab_exercise` is populated on 0 of 13 rows.** Confirms F-5 exactly as written — the only existing hook for lab content is an empty TEXT column.
+- **`assignments.week_number` values in use:** 0, 1, 2, 3, 5, 6, 7, 8. **Week 4 has no submissions at all.**
+- **`assignments.status` values in use:** `Approved` (12), `Portfolio Ready` (12), `Needs Revision` (1). Note `Portfolio Ready` — Milestone 4 renames portfolio to capstone and **this status value is live data on 12 rows.** It must be migrated, not orphaned.
+- All 13 `weeks` rows are `is_published = true`.
+
+## A5. What remains blocked, and what it blocks
+
+| Unreadable | Needed for | Blocking? |
+|---|---|---|
+| CHECK / UNIQUE constraint definitions | F-1, F-6 confirmation | **No** — new tables sidestep both |
+| RLS policy definitions, RLS on/off per table | Stating policies on new tables | **No** — new policies are written fresh |
+| Indexes | Avoiding duplicate index creation | **Low** — new tables get new indexes |
+| Triggers, functions | Knowing what fires on write | **Low risk, unquantified** |
+
+**Milestone 0's stated purpose is "prerequisite for Milestone 6."** On that test it succeeds: every fact Milestone 6a actually needs is either established or provably irrelevant to a new-tables design. The unreadable items would matter to a migration that altered existing tables. This brief's design does not.
+
+**To close the gap anyway, the owner should run `docs/INTROSPECT.sql` and paste the results back.** It is five read-only SELECTs, safe on production at any time. I will fold the results in if provided; nothing in Milestones 1–6 waits on them.
