@@ -76,10 +76,19 @@ Twelve `pm_*`/`ba_*` columns on `weeks`, a two-value CHECK on `assignments.pathw
 ### D-10 · F-26 — `capability_scores` is insert-only
 No code path ever raises a level or score. Production confirms the shape of the problem: only 4 of 7 learners have rows at all; three have 10 × `Not Started`; one has 11 × `Advanced` (11 = the length of `BA_DOMAINS`), which must have been set by hand for the D-1 passport.
 
-### D-11 · F-17 — `avg_score` and `assignment_completion_pct` are never recomputed
-Grading an assignment does not move the learner's average. Production: 25 assignments graded, but only **1 of 7** learners has `avg_score > 0`. `attendance_pct` is correctly recomputed and all 7 learners have it — so the intent existed and was applied to one metric of three. This gates passport eligibility (`app/api/passport-issue/route.ts:76`) and is the reason the D-1 passport has a zero score.
+### D-11 · F-17 — `avg_score` and `assignment_completion_pct` are never recomputed — **DISPLAY fixed in Milestone 5; the columns are still stale**
+Grading an assignment does not move the learner's average. Production: 25 assignments graded, but only **1 of 7** learners has `avg_score > 0`, and `assignment_completion_pct` is **0.00 for all 7**. `attendance_pct` is correctly recomputed and all 7 learners have it — so the intent existed and was applied to one metric of three.
 
-Not fixed here: it is a real defect but not launch-blocking for week 1 of a cohort, and the correct recomputation depends on decisions the rebuild owns (which statuses count, whether resubmissions average or replace).
+**What M5 changed.** Every learner-facing and admin-facing *display* of these metrics now derives them from the rows instead of reading the columns (`lib/passport-progress.ts`). Measured with `scripts/check-passport-progress-live.ts`: 6 of 7 learners were being shown a number their own assignment rows contradicted — four of them shown an average of 0 while holding graded work averaging 73.8 to 88. Grading an assignment now moves the learner's displayed progress, because it is the same fact read twice rather than two facts kept in step.
+
+**What is still open.** The columns themselves are untouched and still stale. That matters in one place: `app/api/passport-issue/route.ts:76` gates issuance on `avg_score`, so a learner can now correctly see "criteria met" while issuance refuses. M5's brief is display-only and explicitly does not wire issuance, so this divergence is deliberate — but **the owner should know that issuance reads the stale column, not the computed value.** The recomputation questions this entry originally raised are half-answered: `assignments` is unique on (learner, week, pathway), so a resubmission replaces rather than accumulates and there is nothing to average; which statuses count is settled by `isApprovedWork()`. What remains is whether to backfill the columns or drop them, which belongs with the rebuild.
+
+### D-11b · Attendance percentage cannot be derived from the `attendance` table — **found during Milestone 5**
+All **62** attendance rows have `attended = true`. Absence is recorded by the **absence of a row**, not by a false flag, so `attended / rows` is 100% for every learner — which is exactly what the first version of the M5 computation returned before it was checked against production.
+
+The denominator has to be sessions *held*, and nothing states it: `sessions` holds 7 rows while learners have 10–14 attendance rows each, and the maintained `attendance_pct` values imply a denominator of **11** (10/11 = 91%, 8/11 = 73%) that appears nowhere in the schema.
+
+So attendance is the one criterion that still reads its stored column, deliberately, and fails closed to 0% if that column is ever null. Fixing this properly means recording absence explicitly — an attendance row per learner per session held, or a sessions-held count the product can read. Not attempted in M5.
 
 ---
 

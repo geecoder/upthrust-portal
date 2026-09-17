@@ -4,7 +4,8 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase';
 import type { Learner, Assignment, Attendance, CapabilityScore } from '@/lib/types';
-import { RISK_COLOR, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG, isApprovedWork } from '@/lib/types';
+import { RISK_COLOR, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG, PASSPORT_CRITERIA, isApprovedWork } from '@/lib/types';
+import { computePassportProgress } from '@/lib/passport-progress';
 import Link from 'next/link';
 import ClerkLinkForm from './ClerkLinkForm';
 import PathwayEditor from './PathwayEditor';
@@ -16,11 +17,13 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
   const { learnerId } = await params;
   const db = createAdminClient();
 
-  const [{ data: learner }, { data: assignments }, { data: attendance }, { data: capScores }] = await Promise.all([
+  const [{ data: learner }, { data: assignments }, { data: attendance }, { data: capScores }, { data: weeks }] = await Promise.all([
     db.from('learners').select('*').eq('id', learnerId).maybeSingle(),
     db.from('assignments').select('*').eq('learner_id', learnerId).order('week_number'),
     db.from('attendance').select('*').eq('learner_id', learnerId).order('week_number'),
     db.from('capability_scores').select('*').eq('learner_id', learnerId),
+    // For the computed metrics below. See lib/passport-progress.ts.
+    db.from('weeks').select('week_number, phase, is_published, pm_assignment_title, ba_assignment_title'),
   ]);
 
   if (!learner) notFound();
@@ -33,6 +36,22 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
   const submitted = typedAssignments.filter(a => a.status !== 'Not Started').length;
   const approved = typedAssignments.filter(isApprovedWork).length;
   const withFeedback = typedAssignments.filter(a => a.feedback).length;
+
+  // Avg Score and Attendance were read off learners.avg_score and
+  // learners.attendance_pct. avg_score is 0 for 6 of 7 production learners
+  // because nothing recomputes it (D-11), so this screen was showing staff a
+  // dash for learners with graded work. Computed from the same rows the learner
+  // sees, so admin and learner cannot be looking at different numbers.
+  const progress = computePassportProgress({
+    pathway: typedLearner.pathway === 'BA' ? 'BA' : 'PM',
+    assignments: typedAssignments,
+    attendance: typedAttendance,
+    weeks: (weeks || []) as { week_number: number; phase?: string | null; is_published?: boolean | null }[],
+    storedAttendancePct: typedLearner.attendance_pct,
+    storedCapstoneStatus: typedLearner.capstone_status,
+  });
+  const avgScore = progress.criteria.find(c => c.key === 'avg_score')!;
+  const attendancePct = progress.criteria.find(c => c.key === 'attendance')!;
 
   return (
     <div className="portal-content">
@@ -90,9 +109,9 @@ export default async function LearnerDetailPage({ params }: { params: Promise<{ 
         {[
           { label: 'Risk Status', value: typedLearner.risk_status || 'Green', color: RISK_COLOR[typedLearner.risk_status || 'Green'] },
           { label: 'Submitted', value: `${submitted}`, sub: 'assignments', color: 'var(--ink)' },
-          { label: 'Approved', value: `${approved}`, sub: 'portfolio items', color: 'var(--moss)' },
-          { label: 'Avg Score', value: typedLearner.avg_score ? `${typedLearner.avg_score}` : '—', sub: 'out of 100', color: (typedLearner.avg_score || 0) >= 70 ? 'var(--moss)' : 'var(--amber-deep)' },
-          { label: 'Attendance', value: `${typedLearner.attendance_pct || 0}%`, sub: '75% required', color: (typedLearner.attendance_pct || 0) >= 75 ? 'var(--moss)' : 'var(--amber-deep)' },
+          { label: 'Approved', value: `${approved}`, sub: 'artefacts', color: 'var(--moss)' },
+          { label: 'Avg Score', value: avgScore.actual > 0 ? `${avgScore.actual}` : '—', sub: `${progress.scoredCount} reviewed`, color: avgScore.met ? 'var(--moss)' : 'var(--amber-deep)' },
+          { label: 'Attendance', value: `${attendancePct.actual}%`, sub: `${PASSPORT_CRITERIA.attendance_min}% required`, color: attendancePct.met ? 'var(--moss)' : 'var(--amber-deep)' },
         ].map(s => (
           <div key={s.label} className="card" style={{ textAlign: 'center', padding: '16px 12px' }}>
             <p style={{ fontFamily: 'Fraunces, serif', fontSize: '1.5rem', color: s.color, lineHeight: 1, fontWeight: 500 }}>{s.value}</p>

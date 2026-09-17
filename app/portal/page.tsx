@@ -7,6 +7,7 @@ import Link from 'next/link';
 import type { Learner, Assignment, Week, Announcement, Notification } from '@/lib/types';
 import { PASSPORT_CRITERIA, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG, RISK_COLOR, PHASE_COLORS, isApprovedWork } from '@/lib/types';
 import { getModuleAccess } from '@/lib/module-access';
+import { computePassportProgress } from '@/lib/passport-progress';
 
 function ProgressRing({ pct, color = 'var(--amber)', size = 80, stroke = 7 }: { pct: number; color?: string; size?: number; stroke?: number }) {
   const r = (size - stroke * 2) / 2;
@@ -73,6 +74,14 @@ export default async function DashboardPage() {
 
   const { data: assignments } = await db.from('assignments').select('*').eq('learner_id', learner.id).order('week_number');
 
+  // For the passport summary card. Two of the three stored metric columns on
+  // `learners` are never maintained, so the criteria are computed from rows —
+  // see lib/passport-progress.ts.
+  const { data: attendanceRows } = await db
+    .from('attendance')
+    .select('week_number, attended')
+    .eq('learner_id', learner.id);
+
   // Skipped entirely when notifications are off: no query, no rows, no cards.
   const { data: notifications } = access.notifications
     ? await db.from('notifications').select('*').eq('learner_id', learner.id).eq('is_read', false).order('created_at', { ascending: false }).limit(5)
@@ -128,14 +137,41 @@ export default async function DashboardPage() {
   const nextAction = getNextAction();
 
   // Passport progress
-  const passportChecks = [
-    { label: `Attendance ≥${PASSPORT_CRITERIA.attendance_min}%`, met: (typedLearner.attendance_pct || 0) >= PASSPORT_CRITERIA.attendance_min, value: `${typedLearner.attendance_pct || 0}%` },
-    { label: `Assignments ≥${PASSPORT_CRITERIA.assignment_submission_min}%`, met: (typedLearner.assignment_completion_pct || 0) >= PASSPORT_CRITERIA.assignment_submission_min, value: `${typedLearner.assignment_completion_pct || 0}%` },
-    { label: `Avg score ≥${PASSPORT_CRITERIA.avg_score_min}`, met: (typedLearner.avg_score || 0) >= PASSPORT_CRITERIA.avg_score_min, value: typedLearner.avg_score ? `${typedLearner.avg_score}/100` : '—' },
-    { label: 'Capstone submitted', met: typedLearner.capstone_status !== 'Not Started', value: typedLearner.capstone_status },
-    { label: `≥${PASSPORT_CRITERIA.capstone_artefacts_min} approved artefacts`, met: approvedCount >= PASSPORT_CRITERIA.capstone_artefacts_min, value: `${approvedCount}` },
-  ];
-  const passportMet = passportChecks.filter(c => c.met).length;
+  // The same computation the passport page runs, so the dashboard summary and
+  // the passport screen can never tell the learner different things. Labels are
+  // shortened for the narrow card; the met/not decision is not re-derived here.
+  const progress = computePassportProgress({
+    pathway,
+    assignments: typedAssignments,
+    attendance: (attendanceRows || []) as { week_number: number; attended?: boolean | null }[],
+    weeks: typedWeeks,
+    storedAttendancePct: typedLearner.attendance_pct,
+    storedCapstoneStatus: typedLearner.capstone_status,
+  });
+
+  const SHORT_LABEL: Record<string, string> = {
+    attendance: `Attendance ≥${PASSPORT_CRITERIA.attendance_min}%`,
+    submission: `Assignments ≥${PASSPORT_CRITERIA.assignment_submission_min}%`,
+    avg_score: `Avg score ≥${PASSPORT_CRITERIA.avg_score_min}`,
+    capstone: 'Capstone submitted',
+    artefacts: `≥${PASSPORT_CRITERIA.capstone_artefacts_min} approved artefacts`,
+  };
+
+  const avgCriterion = progress.criteria.find((c) => c.key === 'avg_score')!;
+  const attendanceCriterion = progress.criteria.find((c) => c.key === 'attendance')!;
+  const submissionCriterion = progress.criteria.find((c) => c.key === 'submission')!;
+
+  const passportChecks = progress.criteria.map((c) => ({
+    label: SHORT_LABEL[c.key] ?? c.label,
+    met: c.met,
+    value:
+      c.key === 'capstone'
+        ? c.met ? 'Started' : 'Not Started'
+        : c.key === 'avg_score'
+          ? c.actual > 0 ? `${c.actual}/100` : '—'
+          : `${c.actual}${c.unit}`,
+  }));
+  const passportMet = progress.metCount;
 
   const phaseColor = PHASE_COLORS[thisWeek?.phase || 'Foundation'];
 
@@ -195,9 +231,13 @@ export default async function DashboardPage() {
       {/* Progress stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
         {[
-          { label: 'Assignments Submitted', value: `${submittedCount}/${currentWeek + 1}`, sub: `${Math.round((submittedCount / Math.max(currentWeek + 1, 1)) * 100)}% this far`, color: 'var(--ink)' },
-          { label: 'Average Score', value: typedLearner.avg_score ? `${typedLearner.avg_score}` : '—', sub: 'out of 100', color: (typedLearner.avg_score || 0) >= 70 ? 'var(--moss)' : 'var(--amber-deep)' },
-          { label: 'Attendance', value: `${typedLearner.attendance_pct || 0}%`, sub: '75% required', color: (typedLearner.attendance_pct || 0) >= 75 ? 'var(--moss)' : 'var(--amber-deep)' },
+          // Same source as the passport card below and as the passport page.
+          // These three read learners.avg_score and learners.attendance_pct
+          // directly with thresholds written in by hand, which is how the
+          // dashboard and the passport screen came to disagree.
+          { label: 'Assignments Submitted', value: `${progress.submittedCount}/${progress.expectedCount}`, sub: `${submissionCriterion.actual}% of the programme`, color: 'var(--ink)' },
+          { label: 'Average Score', value: avgCriterion.actual > 0 ? `${avgCriterion.actual}` : '—', sub: avgCriterion.detail, color: avgCriterion.met ? 'var(--moss)' : 'var(--amber-deep)' },
+          { label: 'Attendance', value: `${attendanceCriterion.actual}%`, sub: `${PASSPORT_CRITERIA.attendance_min}% required`, color: attendanceCriterion.met ? 'var(--moss)' : 'var(--amber-deep)' },
           { label: 'Approved Artefacts', value: `${approvedCount}`, sub: `of ${PASSPORT_CRITERIA.capstone_artefacts_min} required`, color: approvedCount >= PASSPORT_CRITERIA.capstone_artefacts_min ? 'var(--moss)' : 'var(--amber)' },
         ].map(stat => (
           <div key={stat.label} className="card" style={{ textAlign: 'center', padding: '18px 14px' }}>

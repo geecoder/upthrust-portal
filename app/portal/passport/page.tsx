@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createAdminClient } from '@/lib/supabase';
 import type { Learner, Assignment, CapabilityScore } from '@/lib/types';
 import { PASSPORT_CRITERIA, PROGRAM, CAPABILITY_AREAS, isApprovedWork } from '@/lib/types';
+import { computePassportProgress } from '@/lib/passport-progress';
 import Link from 'next/link';
 
 const CAPABILITY_ASSIGNMENT_MAP: Record<string, string[]> = {
@@ -46,30 +47,38 @@ export default async function PassportPage() {
   const { data: learner } = await db.from('learners').select('*').eq('clerk_user_id', userId!).maybeSingle();
   const typedLearner = learner as Learner | null;
 
-  const [{ data: assignments }, { data: capScores }, { data: aiAttempts }] = await Promise.all([
-    learner ? db.from('assignments').select('*').eq('learner_id', learner.id) : { data: [] },
-    learner ? db.from('capability_scores').select('*').eq('learner_id', learner.id) : { data: [] },
-    learner ? db.from('ai_practice_attempts').select('*').eq('learner_id', learner.id).eq('completed', true) : { data: [] },
-  ]);
+  const [{ data: assignments }, { data: capScores }, { data: aiAttempts }, { data: attendance }, { data: weeks }] =
+    await Promise.all([
+      learner ? db.from('assignments').select('*').eq('learner_id', learner.id) : { data: [] },
+      learner ? db.from('capability_scores').select('*').eq('learner_id', learner.id) : { data: [] },
+      learner ? db.from('ai_practice_attempts').select('*').eq('learner_id', learner.id).eq('completed', true) : { data: [] },
+      // Attendance and weeks are new reads. The criteria used to come off three
+      // columns on `learners`, two of which nothing maintains — see
+      // lib/passport-progress.ts for what that was showing learners.
+      learner ? db.from('attendance').select('week_number, attended').eq('learner_id', learner.id) : { data: [] },
+      db.from('weeks').select('week_number, phase, is_published, pm_assignment_title, ba_assignment_title'),
+    ]);
 
   const typedAssignments = (assignments || []) as Assignment[];
   const typedCapScores = (capScores || []) as CapabilityScore[];
 
-  const approvedCount = typedAssignments.filter(a =>
-    isApprovedWork(a)
-  ).length;
-  const submittedCount = typedAssignments.filter(a => a.status !== 'Not Started').length;
-  const totalExpected = 13;
+  // Computed from the rows, not read off learners.* — see
+  // lib/passport-progress.ts. Every number on this page comes from one call, so
+  // the criteria list and the counts in the headers cannot drift apart.
+  const progress = typedLearner
+    ? computePassportProgress({
+        pathway: typedLearner.pathway === 'BA' ? 'BA' : 'PM',
+        assignments: typedAssignments,
+        attendance: (attendance || []) as { week_number: number; attended?: boolean | null }[],
+        weeks: (weeks || []) as { week_number: number; phase?: string | null; is_published?: boolean | null }[],
+        storedAttendancePct: typedLearner.attendance_pct,
+        storedCapstoneStatus: typedLearner.capstone_status,
+      })
+    : null;
 
-  const criteria = typedLearner ? [
-    { label: `Session Attendance ≥${PASSPORT_CRITERIA.attendance_min}%`, target: 75, actual: typedLearner.attendance_pct || 0, met: (typedLearner.attendance_pct || 0) >= PASSPORT_CRITERIA.attendance_min, unit: '%', detail: 'Attend live Saturday sessions' },
-    { label: `Assignments Submitted ≥${PASSPORT_CRITERIA.assignment_submission_min}%`, target: 80, actual: typedLearner.assignment_completion_pct || 0, met: (typedLearner.assignment_completion_pct || 0) >= PASSPORT_CRITERIA.assignment_submission_min, unit: '%', detail: `${submittedCount} of ${totalExpected} submitted` },
-    { label: `Average Score ≥${PASSPORT_CRITERIA.avg_score_min}/100`, target: 70, actual: typedLearner.avg_score || 0, met: (typedLearner.avg_score || 0) >= PASSPORT_CRITERIA.avg_score_min, unit: '/100', detail: 'Based on Genesis-reviewed submissions' },
-    { label: 'Capstone Submitted & Presented', target: 1, actual: typedLearner.capstone_status !== 'Not Started' ? 1 : 0, met: typedLearner.capstone_status !== 'Not Started', unit: '', detail: 'Week 12 Demo Day' },
-    { label: `≥${PASSPORT_CRITERIA.capstone_artefacts_min} Artefacts Approved`, target: 8, actual: approvedCount, met: approvedCount >= PASSPORT_CRITERIA.capstone_artefacts_min, unit: '', detail: `${approvedCount} of 8 required` },
-  ] : [];
-
-  const metCount = criteria.filter(c => c.met).length;
+  const criteria = progress?.criteria ?? [];
+  const approvedCount = progress?.approvedCount ?? 0;
+  const metCount = progress?.metCount ?? 0;
   const isPremium = typedLearner?.tier === 'Premium';
   const issued = typedLearner?.passport_issued;
   const approved = typedLearner?.passport_eligibility === 'Approved';
