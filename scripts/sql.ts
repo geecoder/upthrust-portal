@@ -18,103 +18,122 @@
 //
 // Credentials: SUPABASE_ACCESS_TOKEN, or a file named by SUPABASE_TOKEN_FILE.
 // Never read from .env.local, never printed.
+//
+// EXIT CODES: 0 success, 1 failure. See the note above main() — this script must
+// never call process.exit() after a fetch.
 // ─────────────────────────────────────────────────────────────────────────────
 import fs from 'node:fs';
 
 const PROJECT_REF = 'qzpuvectpqxmtbitmtlm';
 const API = `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`;
 
-function readToken(): string {
+function readToken(): string | null {
   const direct = process.env.SUPABASE_ACCESS_TOKEN?.trim();
   if (direct) return direct;
   const file = process.env.SUPABASE_TOKEN_FILE?.trim();
   if (file && fs.existsSync(file)) return fs.readFileSync(file, 'utf8').trim();
-  console.error('No Supabase access token. Set SUPABASE_ACCESS_TOKEN or SUPABASE_TOKEN_FILE.');
-  process.exit(1);
+  return null;
 }
 
-const argv = process.argv.slice(2);
-const asJson = argv.includes('--json');
-const allowWrite = argv.includes('--write');
-const fileIdx = argv.indexOf('--file');
-
-let query: string;
-if (fileIdx !== -1) {
-  const p = argv[fileIdx + 1];
-  if (!p || !fs.existsSync(p)) {
-    console.error(`No such file: ${p}`);
-    process.exit(1);
+async function main(): Promise<number> {
+  const token = readToken();
+  if (!token) {
+    console.error('No Supabase access token. Set SUPABASE_ACCESS_TOKEN or SUPABASE_TOKEN_FILE.');
+    return 1;
   }
-  query = fs.readFileSync(p, 'utf8');
-} else {
-  query = argv.filter((a) => !a.startsWith('--')).join(' ');
-}
 
-if (!query.trim()) {
-  console.error('Nothing to run. Pass a query, or --file <path>.');
-  process.exit(1);
-}
+  const argv = process.argv.slice(2);
+  const asJson = argv.includes('--json');
+  const allowWrite = argv.includes('--write');
+  const fileIdx = argv.indexOf('--file');
 
-if (!allowWrite) {
-  const danger = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\b/i;
-  if (danger.test(query)) {
-    console.error(
-      'This looks like it changes the database. Schema changes belong in a numbered\n' +
-        'migration applied by scripts/migrate.ts so the change is recorded.\n' +
-        'If you really mean to run it ad hoc, pass --write.'
-    );
-    process.exit(1);
+  let query: string;
+  if (fileIdx !== -1) {
+    const p = argv[fileIdx + 1];
+    if (!p || !fs.existsSync(p)) {
+      console.error(`No such file: ${p}`);
+      return 1;
+    }
+    query = fs.readFileSync(p, 'utf8');
+  } else {
+    query = argv.filter((a) => !a.startsWith('--')).join(' ');
   }
-}
 
-const res = await fetch(API, {
-  method: 'POST',
-  headers: { Authorization: `Bearer ${readToken()}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ query }),
-});
+  if (!query.trim()) {
+    console.error('Nothing to run. Pass a query, or --file <path>.');
+    return 1;
+  }
 
-const text = await res.text();
-if (!res.ok) {
-  let msg = text;
+  if (!allowWrite) {
+    const danger = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\b/i;
+    if (danger.test(query)) {
+      console.error(
+        'This looks like it changes the database. Schema changes belong in a numbered\n' +
+          'migration applied by scripts/migrate.ts so the change is recorded.\n' +
+          'If you really mean to run it ad hoc, pass --write.'
+      );
+      return 1;
+    }
+  }
+
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = text;
+    try {
+      const p = JSON.parse(text);
+      msg = p.message || p.error || text;
+    } catch {
+      /* raw */
+    }
+    console.error(`HTTP ${res.status}: ${msg}`);
+    return 1;
+  }
+
+  let rows: unknown[];
   try {
-    const p = JSON.parse(text);
-    msg = p.message || p.error || text;
+    rows = JSON.parse(text);
   } catch {
-    /* raw */
+    console.log(text);
+    return 0;
   }
-  console.error(`HTTP ${res.status}: ${msg}`);
-  process.exit(1);
+
+  if (asJson) {
+    console.log(JSON.stringify(rows, null, 2));
+    return 0;
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    console.log('(no rows)');
+    return 0;
+  }
+
+  // Column-aligned table.
+  const cols = Object.keys(rows[0] as Record<string, unknown>);
+  const cell = (v: unknown) =>
+    v === null ? 'NULL' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  const widths = cols.map((c) =>
+    Math.min(70, Math.max(c.length, ...rows.map((r) => cell((r as Record<string, unknown>)[c]).length)))
+  );
+  const line = (vals: string[]) =>
+    vals.map((v, i) => (v.length > widths[i] ? v.slice(0, widths[i] - 1) + '…' : v.padEnd(widths[i]))).join('  ');
+
+  console.log(line(cols));
+  console.log(widths.map((w) => '─'.repeat(w)).join('  '));
+  for (const r of rows) console.log(line(cols.map((c) => cell((r as Record<string, unknown>)[c]))));
+  console.log(`\n(${rows.length} row${rows.length === 1 ? '' : 's'})`);
+  return 0;
 }
 
-let rows: unknown[];
-try {
-  rows = JSON.parse(text);
-} catch {
-  console.log(text);
-  process.exit(0);
-}
-
-if (asJson) {
-  console.log(JSON.stringify(rows, null, 2));
-  process.exit(0);
-}
-
-if (!Array.isArray(rows) || rows.length === 0) {
-  console.log('(no rows)');
-  process.exit(0);
-}
-
-// Column-aligned table.
-const cols = Object.keys(rows[0] as Record<string, unknown>);
-const cell = (v: unknown) => (v === null ? 'NULL' : typeof v === 'object' ? JSON.stringify(v) : String(v));
-const widths = cols.map((c) =>
-  Math.min(70, Math.max(c.length, ...rows.map((r) => cell((r as Record<string, unknown>)[c]).length)))
-);
-
-const line = (vals: string[]) => vals.map((v, i) => (v.length > widths[i] ? v.slice(0, widths[i] - 1) + '…' : v.padEnd(widths[i]))).join('  ');
-
-console.log(line(cols));
-console.log(widths.map((w) => '─'.repeat(w)).join('  '));
-for (const r of rows) console.log(line(cols.map((c) => cell((r as Record<string, unknown>)[c]))));
-console.log(`\n(${rows.length} row${rows.length === 1 ? '' : 's'})`);
-process.exit(0);
+// Set process.exitCode and let Node exit naturally. Do NOT call process.exit()
+// here: on Windows, exiting while undici still holds a socket trips a libuv
+// assertion (`!(handle->flags & UV_HANDLE_CLOSING)`) that ABORTS the process
+// with code 127 after the output has been printed — so a failed query and a
+// successful one looked identical to any caller. Natural exit is both correct
+// and, measured, no slower.
+process.exitCode = await main();
