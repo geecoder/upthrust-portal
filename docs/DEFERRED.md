@@ -146,3 +146,34 @@ This is the same root cause as D-22 and it means the broken insert in D-15 was n
 Live data is `'Advanced'` x11 and `'Not Started'` x30. The `CapabilityLevel` type permits `'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Capstone Ready'` — **`'Advanced'` is not in it**, and the column has no CHECK constraint to have caught that. `LEVEL_ORDER` on the passport page does not contain it either, so those 11 rows sort as unknown wherever level ordering is used.
 
 Not fixed in M4: migration 0004 renames the assignment status only. Renaming a level value that no row holds would have been a no-op dressed up as a migration, and deciding what `'Advanced'` should map to is a curriculum question for the owner, not a code one. It belongs with the M6 rebuild, where `capability_scores` is being reconsidered anyway.
+
+### D-25 · `ADMIN_USER_ID` is an unreplaced placeholder — the admin console is unreachable — **found during Milestone 3**
+`.env.local` carries `ADMIN_USER_ID=user_REPLACE_AFTER_FIRST_LOGIN`. `app/admin/layout.tsx:15` reads `if (userId !== process.env.ADMIN_USER_ID) redirect('/portal')`, so **no real Clerk id can ever match and every visitor to `/admin` is redirected away.** Confirmed against the live Clerk user list: the six real users are `user_3E...` ids; none is the placeholder.
+
+Consequences, all of them live wherever that value is unreplaced:
+- **`/admin/modules` cannot be opened, so nobody can toggle a module.** M1 built the console and M3's brief requires the disabled AI tools to be "admin-toggleable back on from the admin console" — that path is currently closed. The flags can only be changed by writing `module_access` directly.
+- Every other admin screen — reviews, learners, sessions, resources — is equally unreachable.
+- `app/portal/page.tsx` never redirects an admin to `/admin`, and the admin bypass in `guardModuleForLearner` / `gateModule` never fires. Those two fail safe, so nothing is over-exposed.
+
+**Not fixed because I cannot fix it correctly:** the right value is the owner's own Clerk user id (`user_3E0U7fAsJV7lg78KZbkK2Vr8CAk` is `genesis.rotechi@gmail.com`, the likely intended admin, but choosing an admin is not my call). It also has to be set in the **Vercel** environment, not just `.env.local` — I can read neither, so whether production is affected is unverified. **Check this before Cohort 2.**
+
+### D-26 · No rate limit or per-learner cap on any AI endpoint — **reported per the M3 brief, not built**
+`/api/simulation`, `/api/interview` and `/api/writing-check` each call the Anthropic API on a signed-in learner's request. A grep for rate limiting, throttling or quota logic across `app/` and `lib/` returns nothing. Any authenticated learner can call these as fast as they can issue requests, and every call bills.
+
+M3 hardened what was trivial — the per-request ceilings below — and deliberately did not build a limiter, which needs shared storage (the process-local counter a serverless deployment would give you is not a limit):
+
+| Route | Input validation before M3 | After |
+|---|---|---|
+| `POST /api/simulation` | `characterId` checked; **`messages` unvalidated** — `messages.map()` threw an unhandled 500 on a non-array, and any array length was forwarded and billed | array checked, ≤60 turns, each message text ≤4,000 chars |
+| `POST /api/interview` | `pathway` coerced, `questionId` looked up; **`userAnswer` untyped and unbounded** | must be a non-empty string, ≤6,000 chars |
+| `POST /api/writing-check` | already the best of the three: ≥50 chars required, truncated to 3,000 | unchanged |
+| `GET /api/simulation`, `GET /api/interview` | no input | unchanged |
+
+Also fixed while in there: both simulation error paths returned `detail: errText` — the provider's raw error body — to the client. Now logged, not returned.
+
+**Still open:** a real per-learner cap. The cheapest honest version is a `ai_practice_attempts` row count per learner per day checked before the call — that table already exists and is insert-only (D-10). Worth doing before the AI tools are opened to a second cohort.
+
+### D-27 · A placeholder learner row is in production — **found during Milestone 3**
+`learners` holds a row with `clerk_user_id = 'user_YOUR_CLERK_USER_ID'` (first name `Genesis`, `Cohort 1`, PM) alongside the real `user_3E0U7f...` Genesis row. It is one of the 7 rows every admin count and every learner tally includes, and it can never be signed in as.
+
+Not deleted here: deleting production rows is the owner's call, and it is harmless beyond skewing counts by one. Recommend removing it, together with the `Testing Onboarding BA Path` row if that is also test data — note that row is the one marked `passport_eligibility = 'Approved'` and is the D-1 inconsistent passport.

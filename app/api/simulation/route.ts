@@ -325,6 +325,12 @@ Tone: Informed, practical. Like a mentor who has shipped products in regulated i
   }
 };
 
+// Ceilings on what one request may send to Anthropic. Not a rate limit — see
+// the note in app/api/writing-check/route.ts — but they bound a single call, so
+// one learner cannot turn one click into an unbounded bill.
+const MAX_TURNS = 60;
+const MAX_MESSAGE_CHARS = 4000;
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -337,6 +343,30 @@ export async function POST(req: Request) {
 
   const character = CHARACTERS[characterId];
   if (!character) return NextResponse.json({ error: 'Character not found' }, { status: 400 });
+
+  // `messages` was taken on trust. Every path below calls messages.map(), so a
+  // non-array body threw a TypeError and returned an unhandled 500 — and an
+  // arbitrarily long array was forwarded to Anthropic at the caller's choosing,
+  // billed to us. Validated and capped here rather than left to the model.
+  if (!Array.isArray(messages)) {
+    return NextResponse.json({ error: 'messages must be an array.' }, { status: 400 });
+  }
+  if (messages.length > MAX_TURNS) {
+    return NextResponse.json(
+      { error: `A simulation runs to ${MAX_TURNS} turns. Start a new one to continue practising.` },
+      { status: 400 }
+    );
+  }
+  const overlong = messages.find(
+    (m: unknown) => typeof (m as { content?: unknown })?.content !== 'string' ||
+      ((m as { content: string }).content.length > MAX_MESSAGE_CHARS)
+  );
+  if (overlong) {
+    return NextResponse.json(
+      { error: `Each message must be text of at most ${MAX_MESSAGE_CHARS} characters.` },
+      { status: 400 }
+    );
+  }
 
   // Debrief mode — analyse the full conversation
   if (mode === 'debrief') {
@@ -365,7 +395,9 @@ export async function POST(req: Request) {
     if (!response.ok) {
       const errText = await response.text();
       console.error('[simulation/debrief] Anthropic error:', response.status, errText);
-      return NextResponse.json({ error: 'AI service error. Please try again.', detail: errText }, { status: 502 });
+      // errText is logged, not returned: it is the provider's raw error body and
+      // has carried request echoes and internal identifiers.
+      return NextResponse.json({ error: 'AI service error. Please try again.' }, { status: 502 });
     }
     const data = await response.json();
     const debrief = data.content?.[0]?.text || '';

@@ -163,6 +163,9 @@ type Question = {
   modelAnswer: string;
 };
 
+/** Ceiling on one evaluated answer. Not a rate limit — none exists; see M3 report. */
+const MAX_ANSWER_CHARS = 6000;
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -177,6 +180,19 @@ export async function POST(req: Request) {
   if (!bank) return NextResponse.json({ error: 'Invalid pathway' }, { status: 400 });
 
   if (mode === 'evaluate') {
+    // userAnswer was interpolated into the prompt with no type check and no
+    // ceiling, so one request could send as much text as the caller liked and
+    // bill it to us. Matches the 3,000-character bound writing-check already
+    // applies to its input.
+    if (typeof userAnswer !== 'string' || userAnswer.trim().length === 0) {
+      return NextResponse.json({ error: 'An answer is required.' }, { status: 400 });
+    }
+    if (userAnswer.length > MAX_ANSWER_CHARS) {
+      return NextResponse.json(
+        { error: `Answers are capped at ${MAX_ANSWER_CHARS} characters. Yours is ${userAnswer.length}.` },
+        { status: 400 }
+      );
+    }
     const allQ = [...bank.behavioural, ...bank.technical, ...bank.commercial];
     const question = allQ.find(q => q.id === questionId);
     if (!question) return NextResponse.json({ error: 'Question not found' }, { status: 404 });
