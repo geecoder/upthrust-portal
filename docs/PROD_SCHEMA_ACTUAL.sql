@@ -448,3 +448,327 @@ CREATE TABLE public.passports (
 -- connection string in the environment, and psql is not installed.
 -- Run docs/INTROSPECT.sql in the Supabase SQL Editor to close the gap.
 -- =============================================================================
+
+-- =============================================================================
+-- APPENDIX A — CONSTRAINTS, RLS, INDEXES, TRIGGERS  (captured 2026-09-17)
+-- =============================================================================
+-- THIS CLOSES THE GAP the original capture could not reach.
+--
+-- Obtained via the Supabase Management API (POST /v1/projects/<ref>/database/query)
+-- using a personal access token supplied by the owner. These are READ-ONLY
+-- SELECTs against pg_catalog — exactly the queries in docs/INTROSPECT.sql.
+--
+-- Everything below is READ FROM THE DATABASE. Nothing here is inferred.
+-- =============================================================================
+
+-- ── CONSTRAINTS ─────────────────────────────────────────────────────────────
+
+-- ai_practice_attempts
+--   [FK    ] ai_practice_attempts_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [PK    ] ai_practice_attempts_pkey
+--            PRIMARY KEY (id)
+
+-- announcements
+--   [CHECK ] announcements_priority_check
+--            CHECK ((priority = ANY (ARRAY['Normal'::text, 'Important'::text, 'Urgent'::text])))
+--   [CHECK ] announcements_target_pathway_check
+--            CHECK ((target_pathway = ANY (ARRAY['PM'::text, 'BA'::text, 'Both'::text, 'All'::text])))
+--   [PK    ] announcements_pkey
+--            PRIMARY KEY (id)
+
+-- app_settings
+--   [PK    ] app_settings_pkey
+--            PRIMARY KEY (key)
+
+-- assignments
+--   [CHECK ] assignments_pathway_check
+--            CHECK ((pathway = ANY (ARRAY['PM'::text, 'BA'::text])))
+--   [CHECK ] assignments_status_check
+--            CHECK ((status = ANY (ARRAY['Not Started'::text, 'In Progress'::text, 'Submitted'::text, 'In Review'::text, 'AI Reviewed'::text, 'Human Reviewed'::text, 'Needs Revision'::text, 'Resubmission Requested'::text, 'Approved'::text, 'Portfolio Ready'::text])))
+--   [FK    ] assignments_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [PK    ] assignments_pkey
+--            PRIMARY KEY (id)
+--   [UNIQUE] assignments_learner_id_week_number_pathway_key
+--            UNIQUE (learner_id, week_number, pathway)
+
+-- attendance
+--   [FK    ] attendance_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [PK    ] attendance_pkey
+--            PRIMARY KEY (id)
+--   [UNIQUE] attendance_learner_id_week_number_key
+--            UNIQUE (learner_id, week_number)
+
+-- capability_scores
+--   [FK    ] capability_scores_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [PK    ] capability_scores_pkey
+--            PRIMARY KEY (id)
+--   [UNIQUE] capability_scores_learner_id_capability_key
+--            UNIQUE (learner_id, capability)
+
+-- community_posts
+--   [CHECK ] community_posts_category_check
+--            CHECK ((category = ANY (ARRAY['Question'::text, 'Win'::text, 'Portfolio Review'::text, 'General'::text])))
+--   [CHECK ] community_posts_pathway_tag_check
+--            CHECK ((pathway_tag = ANY (ARRAY['PM'::text, 'BA'::text, 'Both'::text])))
+--   [FK    ] community_posts_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [PK    ] community_posts_pkey
+--            PRIMARY KEY (id)
+
+-- community_replies
+--   [FK    ] community_replies_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [FK    ] community_replies_post_id_fkey
+--            FOREIGN KEY (post_id) REFERENCES community_posts(id) ON DELETE CASCADE
+--   [PK    ] community_replies_pkey
+--            PRIMARY KEY (id)
+
+-- learners
+--   [CHECK ] learners_portfolio_status_check
+--            CHECK ((portfolio_status = ANY (ARRAY['Not Started'::text, 'Drafting'::text, 'Submitted'::text, 'Reviewed'::text, 'Ready'::text])))
+--   [CHECK ] learners_risk_status_check
+--            CHECK ((risk_status = ANY (ARRAY['Green'::text, 'Amber'::text, 'Red'::text])))
+--   [CHECK ] learners_tier_check
+--            CHECK ((tier = ANY (ARRAY['Standard'::text, 'Premium'::text, 'VIP'::text, 'Corporate'::text])))
+--   [CHECK ] learners_passport_eligibility_check
+--            CHECK ((passport_eligibility = ANY (ARRAY['Not Eligible'::text, 'Pending Review'::text, 'Approved'::text, 'Withheld'::text, 'Needs Revision'::text])))
+--   [CHECK ] learners_enrollment_status_check
+--            CHECK ((enrollment_status = ANY (ARRAY['Pending'::text, 'Active'::text, 'Completed'::text, 'Withdrawn'::text])))
+--   [CHECK ] learners_capstone_status_check
+--            CHECK ((capstone_status = ANY (ARRAY['Not Started'::text, 'In Progress'::text, 'Submitted'::text, 'Presented'::text, 'Approved'::text])))
+--   [CHECK ] learners_pathway_check
+--            CHECK ((pathway = ANY (ARRAY['PM'::text, 'BA'::text, 'Design'::text, 'Undecided'::text])))
+--   [PK    ] learners_pkey
+--            PRIMARY KEY (id)
+--   [UNIQUE] learners_clerk_user_id_key
+--            UNIQUE (clerk_user_id)
+
+-- module_access
+--   [PK    ] module_access_pkey
+--            PRIMARY KEY (id)
+
+-- module_access_audit
+--   [PK    ] module_access_audit_pkey
+--            PRIMARY KEY (id)
+
+-- notifications
+--   [FK    ] notifications_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [PK    ] notifications_pkey
+--            PRIMARY KEY (id)
+
+-- passports
+--   [PK    ] passports_pkey
+--            PRIMARY KEY (id)
+--   [UNIQUE] passports_passport_id_key
+--            UNIQUE (passport_id)
+
+-- portfolio_items
+--   [CHECK ] portfolio_items_status_check
+--            CHECK ((status = ANY (ARRAY['Draft'::text, 'Submitted'::text, 'Approved'::text, 'Featured'::text])))
+--   [FK    ] portfolio_items_learner_id_fkey
+--            FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+--   [PK    ] portfolio_items_pkey
+--            PRIMARY KEY (id)
+
+-- resources
+--   [PK    ] resources_pkey
+--            PRIMARY KEY (id)
+
+-- schema_migrations
+--   [PK    ] schema_migrations_pkey
+--            PRIMARY KEY (filename)
+
+-- sessions
+--   [PK    ] sessions_pkey
+--            PRIMARY KEY (id)
+
+-- weeks
+--   [CHECK ] weeks_phase_check
+--            CHECK ((phase = ANY (ARRAY['Foundation'::text, 'Core Skills'::text, 'Delivery'::text, 'Capstone'::text])))
+--   [PK    ] weeks_pkey
+--            PRIMARY KEY (id)
+--   [UNIQUE] weeks_week_number_key
+--            UNIQUE (week_number)
+
+-- ── RLS POLICIES ────────────────────────────────────────────────────────────
+
+-- ai_practice_attempts
+--   ai_practice_insert_own  [INSERT] roles={public}
+--     USING: —
+--     WITH CHECK: (learner_id = ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+--   ai_practice_select_own  [SELECT] roles={public}
+--     USING: (learner_id = ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+
+-- announcements
+--   ann_read_all  [SELECT] roles={public}
+--     USING: (is_published = true)
+--   announcements_select_all  [SELECT] roles={public}
+--     USING: (is_published = true)
+
+-- assignments
+--   assignments_insert_own  [INSERT] roles={public}
+--     USING: —
+--     WITH CHECK: (learner_id IN ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+--   assignments_select_own  [SELECT] roles={public}
+--     USING: (learner_id IN ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+--   assignments_update_own  [UPDATE] roles={public}
+--     USING: (learner_id IN ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+
+-- attendance
+--   attendance_select_own  [SELECT] roles={public}
+--     USING: (learner_id IN ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+
+-- capability_scores
+--   capability_select_own  [SELECT] roles={public}
+--     USING: (learner_id = ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+
+-- community_posts
+--   community_posts_select_all  [SELECT] roles={public}
+--     USING: true
+--   posts_read_all  [SELECT] roles={public}
+--     USING: true
+
+-- community_replies
+--   community_replies_insert_own  [INSERT] roles={public}
+--     USING: —
+--     WITH CHECK: (learner_id = ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+--   community_replies_select_all  [SELECT] roles={public}
+--     USING: true
+--   replies_read_all  [SELECT] roles={public}
+--     USING: true
+
+-- notifications
+--   notif_select_own  [SELECT] roles={public}
+--     USING: (learner_id IN ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+--   notif_update_own  [UPDATE] roles={public}
+--     USING: (learner_id IN ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+--   notifications_select_own  [SELECT] roles={public}
+--     USING: (learner_id = ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+--   notifications_update_own  [UPDATE] roles={public}
+--     USING: (learner_id = ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+
+-- portfolio_items
+--   portfolio_select_own  [SELECT] roles={public}
+--     USING: (learner_id IN ( SELECT learners.id
+   FROM learners
+  WHERE (learners.clerk_user_id = ((current_setting('request.jwt.claims'::text, true))::json ->> 'sub'::text))))
+
+-- resources
+--   resources_read_all  [SELECT] roles={public}
+--     USING: (is_active = true)
+
+-- sessions
+--   sessions_read_all  [SELECT] roles={public}
+--     USING: true
+
+-- weeks
+--   weeks_select_published  [SELECT] roles={public}
+--     USING: (is_published = true)
+
+-- ── INDEXES ─────────────────────────────────────────────────────────────────
+
+-- ai_practice_attempts
+--   CREATE UNIQUE INDEX ai_practice_attempts_pkey ON public.ai_practice_attempts USING btree (id)
+
+-- announcements
+--   CREATE UNIQUE INDEX announcements_pkey ON public.announcements USING btree (id)
+
+-- app_settings
+--   CREATE UNIQUE INDEX app_settings_pkey ON public.app_settings USING btree (key)
+
+-- assignments
+--   CREATE UNIQUE INDEX assignments_learner_id_week_number_pathway_key ON public.assignments USING btree (learner_id, week_number, pathway)
+--   CREATE UNIQUE INDEX assignments_pkey ON public.assignments USING btree (id)
+
+-- attendance
+--   CREATE UNIQUE INDEX attendance_learner_id_week_number_key ON public.attendance USING btree (learner_id, week_number)
+--   CREATE UNIQUE INDEX attendance_pkey ON public.attendance USING btree (id)
+
+-- capability_scores
+--   CREATE UNIQUE INDEX capability_scores_learner_id_capability_key ON public.capability_scores USING btree (learner_id, capability)
+--   CREATE UNIQUE INDEX capability_scores_pkey ON public.capability_scores USING btree (id)
+
+-- community_posts
+--   CREATE UNIQUE INDEX community_posts_pkey ON public.community_posts USING btree (id)
+
+-- community_replies
+--   CREATE UNIQUE INDEX community_replies_pkey ON public.community_replies USING btree (id)
+
+-- learners
+--   CREATE UNIQUE INDEX learners_clerk_user_id_key ON public.learners USING btree (clerk_user_id)
+--   CREATE UNIQUE INDEX learners_pkey ON public.learners USING btree (id)
+
+-- module_access
+--   CREATE UNIQUE INDEX module_access_cohort_uniq ON public.module_access USING btree (module_key, cohort) WHERE (cohort IS NOT NULL)
+--   CREATE UNIQUE INDEX module_access_global_uniq ON public.module_access USING btree (module_key) WHERE (cohort IS NULL)
+--   CREATE INDEX module_access_module_key_idx ON public.module_access USING btree (module_key)
+--   CREATE UNIQUE INDEX module_access_pkey ON public.module_access USING btree (id)
+
+-- module_access_audit
+--   CREATE INDEX module_access_audit_changed_at_idx ON public.module_access_audit USING btree (changed_at DESC)
+--   CREATE INDEX module_access_audit_module_key_idx ON public.module_access_audit USING btree (module_key, changed_at DESC)
+--   CREATE UNIQUE INDEX module_access_audit_pkey ON public.module_access_audit USING btree (id)
+
+-- notifications
+--   CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id)
+
+-- passports
+--   CREATE INDEX idx_passports_cohort_track ON public.passports USING btree (cohort, track)
+--   CREATE INDEX idx_passports_learner ON public.passports USING btree (learner_id)
+--   CREATE INDEX idx_passports_passport_id ON public.passports USING btree (passport_id)
+--   CREATE INDEX idx_passports_status ON public.passports USING btree (status)
+--   CREATE UNIQUE INDEX passports_passport_id_key ON public.passports USING btree (passport_id)
+--   CREATE UNIQUE INDEX passports_pkey ON public.passports USING btree (id)
+--   CREATE UNIQUE INDEX uniq_passport_issued_per_learner ON public.passports USING btree (learner_id) WHERE (status = 'issued'::text)
+
+-- portfolio_items
+--   CREATE UNIQUE INDEX portfolio_items_pkey ON public.portfolio_items USING btree (id)
+
+-- resources
+--   CREATE UNIQUE INDEX resources_pkey ON public.resources USING btree (id)
+
+-- schema_migrations
+--   CREATE UNIQUE INDEX schema_migrations_pkey ON public.schema_migrations USING btree (filename)
+
+-- sessions
+--   CREATE UNIQUE INDEX sessions_pkey ON public.sessions USING btree (id)
+
+-- weeks
+--   CREATE UNIQUE INDEX weeks_pkey ON public.weeks USING btree (id)
+--   CREATE UNIQUE INDEX weeks_week_number_key ON public.weeks USING btree (week_number)
+
+-- ── TRIGGERS ────────────────────────────────────────────────────────────────
+--   assignments: update_assignments_updated_at BEFORE UPDATE
+--   learners: update_learners_updated_at BEFORE UPDATE
+--   weeks: update_weeks_updated_at BEFORE UPDATE
+
+-- =============================================================================

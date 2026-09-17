@@ -267,3 +267,129 @@ Unchanged since 09-12 and still internally inconsistent, for the three reasons s
 **Milestone 0's stated purpose is "prerequisite for Milestone 6."** On that test it succeeds: every fact Milestone 6a actually needs is either established or provably irrelevant to a new-tables design. The unreadable items would matter to a migration that altered existing tables. This brief's design does not.
 
 **To close the gap anyway, the owner should run `docs/INTROSPECT.sql` and paste the results back.** It is five read-only SELECTs, safe on production at any time. I will fold the results in if provided; nothing in Milestones 1–6 waits on them.
+
+---
+
+# ADDENDUM 2 — Milestone 0 CLOSED, 2026-09-17
+
+The owner supplied a Supabase personal access token, which gives access to the Management API's `database/query` endpoint. **Every gap left open in Addendum 1 is now closed**, read directly from `pg_catalog` rather than inferred. Full capture: `docs/PROD_SCHEMA_ACTUAL.sql`, "APPENDIX A".
+
+This supersedes Addendum 1 section A3 and A5 wherever the two disagree.
+
+## B1. The three Milestone 0 confirmations — now all answered
+
+### (a) The `assignments` uniqueness constraint — **ESTABLISHED**
+
+```
+assignments_learner_id_week_number_pathway_key
+  UNIQUE (learner_id, week_number, pathway)
+```
+
+**F-6 is CONFIRMED exactly as the audit described it.** A learner structurally cannot hold two assignment rows for the same week on the same pathway. The OKAVA model needs two options per week, so it cannot use this table — which is what Milestone 6a was going to do anyway, for independent reasons. The guess in Addendum 1 was right; it is now a fact.
+
+### (b) `pathway` CHECK constraints — **ESTABLISHED, and one is a surprise**
+
+| Table | Column | Permitted values |
+|---|---|---|
+| `assignments` | `pathway` | **`PM`, `BA`** — two only |
+| `learners` | `pathway` | **`PM`, `BA`, `Design`, `Undecided`** — four |
+| `announcements` | `target_pathway` | `PM`, `BA`, `Both` (+ more) |
+| `community_posts` | `pathway_tag` | `PM`, `BA`, `Both` (+ more) |
+| `capability_scores` | — | no pathway column |
+| `weeks` | — | no pathway column; modelled as `pm_*`/`ba_*` column pairs |
+
+**F-1 is CONFIRMED on `assignments`** — two values, and OKAVA needs four.
+
+**The surprise: `learners.pathway` already permits four values, including `Design`.** The audit and Addendum 1 both implied a uniform two-value constraint. It is not uniform. `learners` and `assignments` disagree with each other, so a learner could in principle be set to `Design` and then be unable to hold any assignment row at all — the insert would violate `assignments_pathway_check`. No learner is on `Design` today (5 BA, 2 PM), so this is latent, not live.
+
+**This strengthens the Milestone 6a design rather than changing it.** New tables get a pathway foreign key to a seeded pathway table and no CHECK, which sidesteps both the two-value limit and the disagreement between tables.
+
+### (c) Has `passports` ever held a row — **ESTABLISHED** (unchanged)
+
+Yes, one, still present, still internally inconsistent. See Addendum 1 A3(c).
+
+## B2. Migration 0001 — applied and verified
+
+`assignments.status` now permits all ten values:
+
+```
+CHECK (status = ANY (ARRAY['Not Started','In Progress','Submitted','In Review',
+  'AI Reviewed','Human Reviewed','Needs Revision','Resubmission Requested',
+  'Approved','Portfolio Ready']))
+```
+
+`Human Reviewed` — the "Save Draft" value that no live row proved was ever accepted — is now definitely permitted. F-16 is closed in production, not just in code.
+
+## B3. Correction to Addendum 1 — `sessions` DOES have RLS
+
+Addendum 1 §4 said of `sessions`: *"No RLS, or a permissive policy. The table has no DDL in any file, so `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` was almost certainly never run."*
+
+**The first half was wrong.** RLS *is* enabled on `sessions`. The exposure comes from a deliberate policy:
+
+```
+sessions_read_all  [SELECT]  roles={public}  USING: true
+```
+
+So someone created the table, enabled RLS, and then wrote a policy that lets everyone read it. The practical result is the same — **zoom links and session metadata are readable by anyone holding the anon key, which ships in the browser bundle** — but the cause is a policy decision, not a forgotten step. That matters for the fix: it is one `DROP POLICY`, not a table that needs securing from scratch.
+
+Still out of scope this run. Logged in `docs/DEFERRED.md`.
+
+## B4. RLS across every table — now read, not inferred
+
+All 18 tables have RLS enabled. Policy counts:
+
+| Table | Policies | Note |
+|---|---|---|
+| `learners` | **0** | Deny-all. Service role only. Correct |
+| `passports` | **0** | Deny-all. Correct |
+| `app_settings` | **0** | Deny-all. Correct |
+| `module_access` | **0** | Deny-all — as designed in Milestone 1 |
+| `module_access_audit` | **0** | Deny-all — as designed |
+| `schema_migrations` | **0** | Deny-all — as designed |
+| `assignments` | 3 | |
+| `notifications` | 4 | |
+| `community_replies` | 3 | |
+| `community_posts` | **2** | **Two duplicate `USING (true)` SELECT policies** — `community_posts_select_all` and `posts_read_all`. This is the duplicate-declaration drift F-63 predicted, materialised. Harmless but untidy |
+| `resources` | 1 | `USING (is_active = true)` |
+| `weeks` | 1 | `USING (is_published = true)` |
+| `sessions` | 1 | `USING (true)` — see B3 |
+| `attendance`, `capability_scores`, `portfolio_items`, `ai_practice_attempts`, `announcements` | 1–2 | |
+
+## B5. Triggers — three, all benign
+
+| Table | Trigger | Fires |
+|---|---|---|
+| `assignments` | `update_assignments_updated_at` | BEFORE UPDATE |
+| `learners` | `update_learners_updated_at` | BEFORE UPDATE |
+| `weeks` | `update_weeks_updated_at` | BEFORE UPDATE |
+
+All three are `updated_at` maintenance. Nothing fires on INSERT or DELETE, and nothing cascades into other tables. No hidden behaviour to design around.
+
+## B6. What is now true of the migration ledger
+
+`public.schema_migrations` now exists, created by `scripts/migrate.ts`, recording filename, SHA-256 checksum and applied timestamp. Applied state as of 2026-09-17:
+
+| File | Status |
+|---|---|
+| `0000_baseline.sql` | Never executed by design — a record, not a script |
+| `0001_assignments_status_check.sql` | **Applied** |
+| `0002_app_settings.sql` | **Applied** |
+| `0003_module_access.sql` | **Applied** |
+
+**The specific failure Milestone 0 uncovered — a migration written, committed, and silently never run — can no longer happen unnoticed.** `node --experimental-strip-types scripts/migrate.ts --status` answers the question in one command, and the runner refuses to proceed if an already-applied file has been edited since.
+
+## B7. Nothing was destroyed
+
+Row counts immediately before and immediately after applying all three migrations:
+
+```
+learners 7   assignments 25   attendance 62   capability_scores 41
+notifications 50   passports 1   community_posts 1   community_replies 0
+resources 84   weeks 13   portfolio_items 0   announcements 0
+ai_practice_attempts 0   sessions 7
+assignments.status: Approved 12, Portfolio Ready 12, Needs Revision 1
+```
+
+**Identical on both sides.** The three migrations create tables and widen one CHECK; none of them updates or deletes an existing row.
+
+**Milestone 0 is now complete.** Every question it asked has an answer read from the database.
