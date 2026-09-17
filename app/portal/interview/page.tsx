@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { createBrowserClient } from '@/lib/supabase';
+import { renderAiMarkup } from '@/lib/render-ai-output';
 
 type Question = { id: string; question: string; category: string; };
 type Result = { evaluation: string; modelAnswer: string; };
@@ -301,7 +302,7 @@ export default function InterviewPage() {
                     </p>
                     <div
                       style={{ fontSize: '0.9375rem', lineHeight: 1.75, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap' }}
-                      dangerouslySetInnerHTML={{ __html: (result.evaluation || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
+                      dangerouslySetInnerHTML={{ __html: renderAiMarkup(result.evaluation) }}
                     />
                   </div>
 

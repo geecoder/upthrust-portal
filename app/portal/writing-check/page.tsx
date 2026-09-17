@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { createBrowserClient } from '@/lib/supabase';
+import { renderAiMarkupWithTables } from '@/lib/render-ai-output';
 
 const DOC_TYPES = ['PRD', 'BRD', 'Problem Brief', 'Business Case', 'Process Map Write-up', 'User Stories', 'UAT Pack', 'Stakeholder Map', 'Strategy Canvas', 'Email to stakeholder', 'Other'];
 
@@ -207,16 +208,7 @@ export default function WritingCheckPage() {
               </p>
               <div
                 style={{ fontSize: '0.9rem', lineHeight: 1.8, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap' }}
-                dangerouslySetInnerHTML={{
-                  __html: result
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\|(.*)\|/g, (match) => {
-                      // Style table rows
-                      const cells = match.split('|').filter(c => c.trim() && !c.includes('---'));
-                      if (cells.length === 0) return match;
-                      return `<div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--paper-line);font-size:0.8125rem">${cells.map(c => `<span>${c.trim()}</span>`).join('')}</div>`;
-                    })
-                }}
+                dangerouslySetInnerHTML={{ __html: renderAiMarkupWithTables(result) }}
               />
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--paper-line)', display: 'flex', gap: 10 }}>
                 <button onClick={() => { setResult(''); }} className="btn btn-outline btn-sm">

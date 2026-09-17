@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { renderAiMarkup } from '@/lib/render-ai-output';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 type Character = {
@@ -403,7 +404,7 @@ export default function SimulationPage() {
         <>
           <div style={{ padding: '24px 28px', background: 'var(--white)', border: '1px solid var(--paper-line)', borderRadius: 8, marginBottom: 20 }}>
             <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9375rem', lineHeight: 1.75, color: 'var(--ink-soft)' }}
-              dangerouslySetInnerHTML={{ __html: debrief.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
+              dangerouslySetInnerHTML={{ __html: renderAiMarkup(debrief) }}
             />
           </div>
 

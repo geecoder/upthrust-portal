@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@/lib/supabase';
+import { renderAiMarkup } from '@/lib/render-ai-output';
 import { ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG } from '@/lib/types';
 import type { Assignment, Learner, Week } from '@/lib/types';
 import Link from 'next/link';
@@ -228,7 +229,7 @@ export default function AdminReviewsPage() {
                   ⚡ AI First-Pass Feedback {selected.ai_score ? `· AI Score: ${selected.ai_score}/100` : ''}
                 </p>
                 <div style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap' }}
-                  dangerouslySetInnerHTML={{ __html: selected.ai_feedback.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}
+                  dangerouslySetInnerHTML={{ __html: renderAiMarkup(selected.ai_feedback) }}
                 />
                 {selected.ai_quality_rating && (
                   <div style={{ marginTop: 12, display: 'inline-block', padding: '4px 10px', borderRadius: 100, background: selected.ai_quality_rating === 'Capstone Ready' ? 'rgba(5,150,105,0.1)' : selected.ai_quality_rating === 'Good' ? 'rgba(37,99,235,0.1)' : 'rgba(217,119,6,0.1)', color: selected.ai_quality_rating === 'Capstone Ready' ? 'var(--moss)' : selected.ai_quality_rating === 'Good' ? '#1D4ED8' : 'var(--amber-deep)', fontSize: '0.75rem', fontWeight: 700 }}>
