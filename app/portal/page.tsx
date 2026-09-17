@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase';
 import Link from 'next/link';
 import type { Learner, Assignment, Week, Announcement, Notification } from '@/lib/types';
 import { PASSPORT_CRITERIA, ASSIGNMENT_STATUS_COLOR, ASSIGNMENT_STATUS_BG, RISK_COLOR, PHASE_COLORS } from '@/lib/types';
+import { getModuleAccess } from '@/lib/module-access';
 
 function ProgressRing({ pct, color = 'var(--amber)', size = 80, stroke = 7 }: { pct: number; color?: string; size?: number; stroke?: number }) {
   const r = (size - stroke * 2) / 2;
@@ -65,8 +66,17 @@ export default async function DashboardPage() {
   // Check onboarding
   if (!typedLearner.onboarding_complete) redirect('/portal/onboarding');
 
+  // Resolved for this learner's cohort before anything gated is read. A
+  // disabled module must not be queried at all, let alone rendered — the brief
+  // is explicit that a removed module leaves no work running behind it.
+  const access = await getModuleAccess(typedLearner.cohort);
+
   const { data: assignments } = await db.from('assignments').select('*').eq('learner_id', learner.id).order('week_number');
-  const { data: notifications } = await db.from('notifications').select('*').eq('learner_id', learner.id).eq('is_read', false).order('created_at', { ascending: false }).limit(5);
+
+  // Skipped entirely when notifications are off: no query, no rows, no cards.
+  const { data: notifications } = access.notifications
+    ? await db.from('notifications').select('*').eq('learner_id', learner.id).eq('is_read', false).order('created_at', { ascending: false }).limit(5)
+    : { data: null };
 
   const typedAssignments = (assignments || []) as Assignment[];
   const typedWeeks = (weeks || []) as Week[];
@@ -81,6 +91,23 @@ export default async function DashboardPage() {
   const approvedCount = typedAssignments.filter(a => a.status === 'Approved' || a.status === 'Portfolio Ready' || a.portfolio_approved).length;
   const pendingFeedback = typedAssignments.filter(a => a.feedback && !a.feedback).length;
   const newFeedback = typedAssignments.filter(a => a.feedback_at && new Date(a.feedback_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+
+  // The gated dashboard surfaces, filtered once here rather than with an `if`
+  // at each render site. Every module on this dashboard has presentation
+  // 'absent', so a disabled one leaves no card, no link and no teaser — see
+  // MODULE_REGISTRY in lib/module-access-rules.ts.
+  const aiLabTools = [
+    { href: '/portal/simulation', icon: '🎭', label: 'Stakeholder Simulation', sub: 'Practise real workplace conversations', on: access['ai_lab.stakeholder_sim'] },
+    { href: '/portal/interview', icon: '💬', label: 'Interview Coach', sub: `${pathway} interview questions + scoring`, on: access['ai_lab.interview_coach'] },
+    { href: '/portal/writing-check', icon: '✍️', label: 'Writing Checker', sub: 'Polish docs before submitting', on: access['ai_lab.writing_checker'] },
+  ].filter(t => t.on);
+
+  const quickLinks = [
+    { href: '/portal/assignments', label: '📝 My Assignments', sub: `${submittedCount} submitted`, on: true },
+    { href: '/portal/portfolio', label: '💼 My Portfolio', sub: `${approvedCount} items`, on: true },
+    { href: '/portal/community', label: '💬 Community', sub: 'Ask questions, share wins', on: access.community },
+    { href: '/portal/resources', label: '📚 Resources & Templates', sub: 'Find templates by week', on: true },
+  ].filter(l => l.on);
 
   // Determine next best action
   function getNextAction() {
@@ -327,36 +354,30 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          {/* AI Practice Lab */}
-          <div className="card">
-            <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '1rem', fontWeight: 500, marginBottom: 12 }}>AI Practice Lab</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                { href: '/portal/simulation', icon: '🎭', label: 'Stakeholder Simulation', sub: 'Practise real workplace conversations' },
-                { href: '/portal/interview', icon: '💬', label: 'Interview Coach', sub: `${pathway} interview questions + scoring` },
-                { href: '/portal/writing-check', icon: '✍️', label: 'Writing Checker', sub: 'Polish docs before submitting' },
-              ].map(({ href, icon, label, sub }) => (
-                <Link key={href} href={href} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'var(--paper-soft)', borderRadius: 6, textDecoration: 'none', alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>{icon}</span>
-                  <div>
-                    <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--ink)' }}>{label}</p>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>{sub}</p>
-                  </div>
-                </Link>
-              ))}
+          {/* AI Practice Lab — the whole card goes when every tool is off, so the
+              dashboard never shows an empty panel with a heading on it. */}
+          {aiLabTools.length > 0 && (
+            <div className="card">
+              <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '1rem', fontWeight: 500, marginBottom: 12 }}>AI Practice Lab</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {aiLabTools.map(({ href, icon, label, sub }) => (
+                  <Link key={href} href={href} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'var(--paper-soft)', borderRadius: 6, textDecoration: 'none', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>{icon}</span>
+                    <div>
+                      <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--ink)' }}>{label}</p>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>{sub}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Quick links */}
           <div className="card">
             <h3 style={{ fontFamily: 'Fraunces, serif', fontSize: '1rem', fontWeight: 500, marginBottom: 12 }}>Quick Access</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[
-                { href: '/portal/assignments', label: '📝 My Assignments', sub: `${submittedCount} submitted` },
-                { href: '/portal/portfolio', label: '💼 My Portfolio', sub: `${approvedCount} items` },
-                { href: '/portal/community', label: '💬 Community', sub: 'Ask questions, share wins' },
-                { href: '/portal/resources', label: '📚 Resources & Templates', sub: 'Find templates by week' },
-              ].map(({ href, label, sub }) => (
+              {quickLinks.map(({ href, label, sub }) => (
                 <Link key={href} href={href} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 12px', background: 'var(--paper-soft)', borderRadius: 4, textDecoration: 'none' }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--ink)' }}>{label}</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>{sub}</span>

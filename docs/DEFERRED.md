@@ -118,3 +118,10 @@ Left alone per the Task 5 brief. Full list in the audit at H-97…H-142. The thr
 
 ### D-21 · `resources` has three orphan columns
 `file_url`, `content_type`, `thumbnail_url` exist in production, are written by nothing, and `file_url` is the one the Storage upload at `app/admin/resources/page.tsx:150` computes a URL for but never saves. Uploaded files are effectively lost.
+
+### D-22 · The learner notifications surface has never worked — **found during Milestone 2**
+Both learner-facing notification reads go through the **browser (anon) Supabase client**: the unread badge at `components/Sidebar.tsx` and the whole of `app/portal/notifications/page.tsx` (read at `:56`, mark-read at `:67` and `:74`). `notifications` has RLS enabled with 4 policies and **the anon key sees 0 of 50 rows** (`docs/SCHEMA_DRIFT.md` §4, re-confirmed in Addendum 1). The policies are almost certainly keyed on `auth.uid()`, which this app never sets — it authenticates with Clerk, not Supabase Auth.
+
+So: the badge has always read zero, the notifications page has always been empty, and mark-as-read has always been a no-op. The 50 rows in production have never been delivered to anyone. Admin-side notification creation (`app/api/admin/data/route.ts:275,290,309`) uses the service-role client and does work — it has been writing rows into a table nothing could read.
+
+Not fixed here: Milestone 2 removes notifications from the learner experience, so fixing the read path would be work spent on a module being switched off. **Whoever turns `notifications` back on from `/admin/modules` must fix this first, or they will ship an empty screen.** The fix is to move both reads behind a server route that uses the service-role client and filters by the signed-in learner — the same shape as `/api/admin/data` — not to loosen the RLS policy.

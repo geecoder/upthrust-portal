@@ -188,7 +188,15 @@ export async function guardModule(
 ): Promise<NextResponse | null> {
   const enabled = await isModuleEnabled(moduleKey, cohort);
   if (enabled) return null;
+  return moduleDisabledResponse(moduleKey);
+}
 
+/**
+ * The 403 a disabled module returns. Exported so the route-handler guard in
+ * ./module-gate refuses in exactly the same words and shape as this one — a
+ * client branching on `code` must not have to care which guard said no.
+ */
+export function moduleDisabledResponse(moduleKey: ModuleKey): NextResponse {
   const meta = MODULE_REGISTRY[moduleKey];
   return NextResponse.json(
     {

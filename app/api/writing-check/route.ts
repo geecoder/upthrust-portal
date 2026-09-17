@@ -2,11 +2,15 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { guardModuleForCurrentUser } from '@/lib/module-gate';
 import { MODEL_SONNET } from '@/lib/ai-models';
 
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const denied = await guardModuleForCurrentUser('ai_lab.writing_checker');
+  if (denied) return denied;
 
   const body = await req.json();
   const { text, documentType, pathway } = body;

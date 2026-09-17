@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase';
 import Sidebar from '@/components/Sidebar';
 import type { Learner } from '@/lib/types';
+import { getModuleAccess } from '@/lib/module-access';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
@@ -46,6 +47,13 @@ export default async function PortalLayout({ children }: { children: React.React
     ? 'Genesis (Admin)'
     : `${learner?.first_name || ''} ${learner?.last_name || ''}`.trim() || 'Learner';
 
+  // Resolved SERVER-SIDE so a disabled module's nav item is never sent to the
+  // browser at all. Admins see the same filtered nav as a learner on this
+  // cohort — the portal sidebar is the learner view, and an admin checking what
+  // learners can reach should be looking at what learners actually get. Admins
+  // still reach a gated route directly by URL; see lib/module-gate.ts.
+  const access = await getModuleAccess(learner?.cohort ?? null);
+
   return (
     <div className="portal-layout">
       <Sidebar
@@ -55,6 +63,7 @@ export default async function PortalLayout({ children }: { children: React.React
         tier={isAdmin ? undefined : learner?.tier}
         isAdmin={isAdmin}
         currentWeek={currentWeek}
+        access={access}
       />
       <main className="portal-main">
         {children}

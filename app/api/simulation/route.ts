@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { guardModuleForCurrentUser } from '@/lib/module-gate';
 import { MODEL_SONNET } from '@/lib/ai-models';
 
 // ── CHARACTER DEFINITIONS ─────────────────────────────────────────────────────
@@ -328,6 +329,9 @@ export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const denied = await guardModuleForCurrentUser('ai_lab.stakeholder_sim');
+  if (denied) return denied;
+
   const body = await req.json();
   const { characterId, messages, mode } = body;
 
@@ -419,6 +423,9 @@ export async function POST(req: Request) {
 export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const denied = await guardModuleForCurrentUser('ai_lab.stakeholder_sim');
+  if (denied) return denied;
 
   // Return character list for the UI
   return NextResponse.json({

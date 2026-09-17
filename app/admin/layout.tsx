@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
+import { getModuleAccess } from '@/lib/module-access';
 
 export default async function AdminLayout({
   children,
@@ -15,12 +16,18 @@ export default async function AdminLayout({
 
   const currentWeek = getCurrentWeek();
 
+  // The admin screens share the learner sidebar, so it needs the same resolved
+  // access. Global state (no cohort) is the right view here: an admin working
+  // in /admin is looking at the product, not at one cohort's experience.
+  const access = await getModuleAccess(null);
+
   return (
     <div className="portal-layout">
       <Sidebar
         learnerName="Genesis (Admin)"
         isAdmin
         currentWeek={currentWeek}
+        access={access}
       />
       <main className="portal-main">
         {children}

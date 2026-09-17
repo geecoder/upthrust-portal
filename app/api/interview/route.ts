@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { guardModuleForCurrentUser } from '@/lib/module-gate';
 import { MODEL_SONNET } from '@/lib/ai-models';
 
 const QUESTION_BANKS: Record<string, {
@@ -166,6 +167,9 @@ export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const denied = await guardModuleForCurrentUser('ai_lab.interview_coach');
+  if (denied) return denied;
+
   const body = await req.json();
   const { pathway, questionId, userAnswer, category, mode } = body;
 
@@ -251,6 +255,9 @@ Please evaluate this answer now.`;
 export async function GET(req: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const denied = await guardModuleForCurrentUser('ai_lab.interview_coach');
+  if (denied) return denied;
 
   const url = new URL(req.url);
   const pathway = url.searchParams.get('pathway') || 'PM';
