@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { createBrowserClient } from '@/lib/supabase';
 
 const PREFERRED_ROLES_PM = ['Junior PM', 'Associate PM', 'Product Owner', 'Product Analyst', 'Growth PM', 'Technical PM'];
 const PREFERRED_ROLES_BA = ['Junior BA', 'Associate BA', 'Business Analyst', 'Systems Analyst', 'Product Owner', 'Requirements Analyst'];
@@ -32,11 +31,13 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'personal' | 'career' | 'visibility'>('personal');
 
-  const db = createBrowserClient();
 
   useEffect(() => {
     if (!user) return;
-    db.from('learners').select('*').eq('clerk_user_id', user.id).maybeSingle().then(({ data }) => {
+    // /api/me, not the browser Supabase client. RLS shows the anon key no
+    // learner rows, so this form rendered empty for every learner — every
+    // field blank, regardless of what was saved. See app/api/me/route.ts.
+    fetch('/api/me').then(r => r.json()).then(({ learner: data }) => {
       setLearner(data);
       if (data) {
         setForm({

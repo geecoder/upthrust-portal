@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { createBrowserClient } from '@/lib/supabase';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 type Character = {
@@ -31,10 +30,15 @@ export default function SimulationPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // /api/me rather than the browser Supabase client: RLS shows the anon key no
+  // learner rows, so this read returned null for every learner and
+  // learner?.pathway below was never known. See app/api/me/route.ts.
   useEffect(() => {
     if (!user) return;
-    const db = createBrowserClient();
-    db.from('learners').select('*').eq('clerk_user_id', user.id).maybeSingle().then(({ data }) => setLearner(data));
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(d => setLearner(d.learner ?? null))
+      .catch(() => setLearner(null));
     fetch('/api/simulation').then(r => r.json()).then(d => setCharacters(d.characters || []));
   }, [user]);
 

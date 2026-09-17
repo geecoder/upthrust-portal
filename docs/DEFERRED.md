@@ -41,10 +41,19 @@ Task 7 reduced the payload to those four fields but deliberately did not change 
 
 **Recommended before the first cohort graduates:** require a valid `?sig` to render anything, and make the PDF/QR emit the signed URL — which is what `app/api/passport-pdf/QR_PATCH.md` was already written to do. That closes enumeration and makes the `?sig` parameter meaningful at the same time.
 
-### D-2 · `sessions` appears to have no RLS — **new finding**
-The anon key reads all 7 rows of `sessions` (`docs/SCHEMA_DRIFT.md` §4). The table has no `CREATE TABLE` in any repo file, so `ENABLE ROW LEVEL SECURITY` was almost certainly never run on it. Zoom links, session dates and descriptions are readable by anyone holding the anon key, which ships in the client JS bundle.
+### D-2 · `sessions` was readable by anyone holding the anon key — **FIXED, migration 0005**
+RLS *was* enabled (Addendum 1's guess that it was not was wrong — see `docs/SCHEMA_DRIFT.md` B3); the exposure came from a deliberate policy, `sessions_read_all SELECT USING (true)`.
 
-Not fixed here: enabling RLS on a live table that two pages read is a behaviour change needing a policy designed alongside it, and `docs/INTROSPECT.sql` query 2a must confirm the RLS state first. Low severity (the content is semi-public by nature), but it is an unintended exposure.
+**This entry originally called it "low severity (the content is semi-public by nature)". That was wrong.** Measured with the anon key alone on 2026-09-17: 7 rows, each carrying a **live Zoom join link with the password in the query string** (`https://us06web.zoom.us/j/876...?pwd=NB6PbBk...`). The anon key ships in the client bundle, so anyone who viewed source could list every session and join any of them uninvited. A meeting-access leak, not metadata.
+
+**Fixed** by `0005_sessions_rls.sql`, applied 2026-09-17. Safe to drop because nothing read the table with the anon key — both readers (`app/portal/sessions/page.tsx:34`, `app/api/admin/data/route.ts:569`) use the service-role client, which bypasses RLS. Verified before and after:
+
+| | anon rows | Zoom links visible | service-role rows |
+|---|---|---|---|
+| before | 7 | **yes** | 7 |
+| after | **0** | no | 7 |
+
+**Sibling not fixed:** `weeks` has `weeks_select_published USING (is_published = true)` and all 13 weeks are published, so the anon key reads every week row — including 8 `recording_url` YouTube links and several `session_slides_url` Google Slides / Notion links. No `weeks.zoom_link` is populated, so no meeting credential leaks this way. It is **not** dropped because `app/admin/content/page.tsx` reads `weeks` through the browser client and tightening the policy would break the content editor. Fixing it means moving that read server-side first — the same work D-23 did for the learner pages.
 
 ### D-3 · `supabase-additions.sql` was only partially applied
 Four columns it declares do not exist in production (`attendance.session_title`, `attendance.missed_session_task_sent`, `weeks.pm_rubric_json`, `weeks.ba_rubric_json`), all after line 33. The duplicate `CREATE POLICY` at line 213 would raise an error and abort the rest of the script. Nothing records which statements landed.
@@ -140,7 +149,11 @@ Not fixed here: Milestone 2 removes notifications from the learner experience, s
 
 This is the same root cause as D-22 and it means the broken insert in D-15 was never reachable from the UI — two defects stacked, which is why neither was noticed.
 
-**Not deferred, resolved**: M4 replaced this surface with `/portal/capstone`, a server component that reads with the service-role client. `/portal/portfolio` is now a redirect. Logged here because the *pattern* is the finding: **every remaining learner page that reads learner-scoped data from the browser is in this condition.** The ones left are `app/portal/community/page.tsx`, `app/portal/notifications/page.tsx` and `app/portal/profile/page.tsx`. Community and Notifications are switched off as of M2; **profile is not**, and is worth checking before Cohort 2.
+**Resolved for every reachable page.** M4 replaced the portfolio surface with `/portal/capstone`, a server component. The rest was closed after M3: `GET /api/me` (`app/api/me/route.ts`) serves the signed-in learner their own row, read server-side with the service-role client and narrowed to the `LEARNER_SELF_READABLE` allowlist, and the four reachable pages now use it — profile, simulation, onboarding and resources. Proved by `scripts/verify-learner-data-path.ts` (17 assertions).
+
+**The severe case was onboarding, and it was a Cohort 2 blocker.** `completeOnboarding()` ran a cascade of three attempts: an anon `UPDATE` by learner id, an anon `UPDATE` by `clerk_user_id`, then `/api/complete-onboarding` as a "fallback". The first two could never succeed, and the branch taken when `learner` was null — which was always, since that read was anon too — never reached the API route at all. A blocked `UPDATE` matches zero rows and **PostgREST answers 204 with no error**, so nothing threw: the page navigated to `/portal`, `/portal` saw `onboarding_complete` still false and bounced the learner back. `onboarding_complete` defaults to `false` and both creation paths write it explicitly (`app/api/webhook/clerk/route.ts:140`, `app/admin/learners/add/page.tsx:69`), so **every Cohort 2 learner would have been stuck in that loop with no error displayed.** The 7 existing learners escaped only because the flag was set for them outside the form — all 7 read `onboarding_complete = true` with a NULL `onboarding_completed_at` and NULL `career_goal`. The cascade is now one server call.
+
+**Still carrying the pattern, all currently unreachable** (listed by the verify script each run, so they cannot be forgotten): `community/page.tsx`, `interview/page.tsx`, `writing-check/page.tsx`, `notifications/page.tsx` — all behind switched-off modules — plus `components/Sidebar.tsx`'s unread badge (already guarded off, and D-22), and `admin/learners/add/page.tsx` and `admin/learners/[learnerId]/ClerkLinkForm.tsx`, behind an `/admin` that D-25 makes unreachable. **Each must be fixed before its module or the console is re-enabled.**
 
 ### D-24 · `capability_scores.level` holds a value its own type forbids — **found during Milestone 4**
 Live data is `'Advanced'` x11 and `'Not Started'` x30. The `CapabilityLevel` type permits `'Not Started' | 'Emerging' | 'Developing' | 'Competent' | 'Capstone Ready'` — **`'Advanced'` is not in it**, and the column has no CHECK constraint to have caught that. `LEVEL_ORDER` on the passport page does not contain it either, so those 11 rows sort as unknown wherever level ordering is used.

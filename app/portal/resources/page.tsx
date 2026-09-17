@@ -206,14 +206,19 @@ export default function ResourcesPage() {
   useEffect(() => {
     if (!user) return;
     async function load() {
-      const [{ data: l }, { data: r }] = await Promise.all([
-        db.from('learners').select('*').eq('clerk_user_id', user!.id).maybeSingle(),
+      // The learner comes from /api/me — the anon key is shown no learner rows,
+      // so the previous read here returned null and the pathway filter below
+      // silently fell back to 'PM' for every BA learner. `resources` stays on
+      // the browser client: it is published template content, readable by
+      // policy (is_active = true), and carries nothing learner-specific.
+      const [meRes, { data: r }] = await Promise.all([
+        fetch('/api/me').then(res => res.json()).catch(() => ({ learner: null })),
         db.from('resources').select('*').eq('is_active', true)
           .order('is_featured', { ascending: false })
           .order('week_number', { ascending: true, nullsFirst: false })
           .order('title'),
       ]);
-      setLearner(l);
+      setLearner(meRes.learner ?? null);
       setResources((r || []) as Resource[]);
       setLoading(false);
     }

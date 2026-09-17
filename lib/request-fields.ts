@@ -124,6 +124,60 @@ export const LEARNER_SELF_EDITABLE = [
 ] as const;
 
 /**
+ * Columns of their OWN learner row that a learner may READ, via GET /api/me.
+ *
+ * The read counterpart to LEARNER_SELF_EDITABLE above, and needed for the same
+ * reason: the endpoint serves this row with the SERVICE ROLE client, which
+ * bypasses RLS, so `select('*')` would hand the browser every column on the
+ * row. An allowlist means adding an internal column to `learners` later cannot
+ * silently start publishing it.
+ *
+ * Wider than LEARNER_SELF_EDITABLE because a learner may see things they may
+ * not change — their pathway, tier and cohort are shown all over the portal.
+ *
+ * DELIBERATELY EXCLUDED, and these are the ones that matter:
+ *   risk_status, notes, facilitator_note     staff assessment ABOUT the learner,
+ *                                            written for colleagues, not for them
+ *   avg_score, attendance_pct,
+ *   assignment_completion_pct                stale columns nothing maintains
+ *                                            (docs/DEFERRED.md D-11). The
+ *                                            passport and dashboard compute
+ *                                            these from rows instead — see
+ *                                            lib/passport-progress.ts — so
+ *                                            serving them here would only give
+ *                                            a second, wrong answer
+ *   passport_eligibility, passport_issued,
+ *   passport_id, capstone_status             credential state. Shown on the
+ *                                            passport screen, which reads it
+ *                                            server-side; not needed by any
+ *                                            client component
+ *   enrollment_status                        administrative state
+ *   clerk_user_id                            the caller already knows their own
+ */
+export const LEARNER_SELF_READABLE = [
+  'id',
+  'email',
+  'first_name',
+  'last_name',
+  'phone',
+  'country',
+  'pathway',
+  'tier',
+  'cohort',
+  'onboarding_complete',
+  // The self-editable set, so a form can round-trip what it is allowed to save.
+  'current_job_role',
+  'career_goal',
+  'bio',
+  'linkedin_url',
+  'cv_url',
+  'work_preference',
+  'availability',
+  'preferred_roles',
+  'employer_visible',
+] as const;
+
+/**
  * Columns an admin may write on a `weeks` row via /api/admin/save-week.
  * Mirrors EDITABLE_FIELDS in app/admin/content/page.tsx:9-29.
  *

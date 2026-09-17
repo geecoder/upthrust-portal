@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@/lib/supabase';
 import { UpthrustLogo } from '@/components/UpthrustLogo';
 
 const STEPS = [
@@ -55,20 +54,32 @@ export default function OnboardingPage() {
     career_goal: '', current_job_role: '', bio: '', linkedin_url: '', work_preference: 'Remote',
   });
 
+  // Read through /api/me, not the browser Supabase client. The anon key is
+  // shown 0 of 7 learner rows by RLS, so the previous read here returned null
+  // for every learner, every time — which is what sent completeOnboarding()
+  // into a branch that could not write anything. See app/api/me/route.ts.
   useEffect(() => {
     if (!user) return;
-    const db = createBrowserClient();
-    db.from('learners')
-      .select('*')
-      .eq('clerk_user_id', user.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        setLoadingLearner(false);
-        if (error) { console.error('Onboarding DB error:', error); return; }
-        if (!data) {
-          setDebugInfo(`No learner record found for Clerk ID: ${user.id}`);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/me');
+        const payload = await res.json().catch(() => ({}));
+        if (cancelled) return;
+
+        if (!res.ok) {
+          setSaveError(payload.error || 'Could not load your account. Please reload.');
           return;
         }
+        const data = payload.learner;
+        if (!data) {
+          setSaveError(
+            'We could not find your learner record. Email info@upthrustdigital.com and we will link your account.'
+          );
+          return;
+        }
+
         setLearner(data);
         setForm({
           career_goal: data.career_goal || '',
@@ -77,11 +88,15 @@ export default function OnboardingPage() {
           linkedin_url: data.linkedin_url || '',
           work_preference: data.work_preference || 'Remote',
         });
-        // Already completed — go straight to dashboard
-        if (data.onboarding_complete) {
-          window.location.replace('/portal');
-        }
-      });
+        if (data.onboarding_complete) window.location.replace('/portal');
+      } catch {
+        if (!cancelled) setSaveError('Could not reach the server. Check your connection and reload.');
+      } finally {
+        if (!cancelled) setLoadingLearner(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [user]);
 
   async function completeOnboarding() {
@@ -89,66 +104,42 @@ export default function OnboardingPage() {
     setSaving(true);
     setDebugInfo('');
 
+    // ONE path, server-side. This used to be a cascade of three attempts: an
+    // anon UPDATE by learner id, then an anon UPDATE by clerk_user_id, then
+    // this API route as a "fallback". The first two could never succeed —
+    // `learners` has RLS and the anon key matches no rows — and the branch
+    // taken when `learner` was null (which was always, because the read above
+    // was also anon) never reached the API route at all.
+    //
+    // That was not a slow path, it was a silent one. A blocked UPDATE matches
+    // zero rows and PostgREST answers 204 with NO error, so nothing threw,
+    // the code navigated to /portal as though it had saved, /portal saw
+    // onboarding_complete still false and bounced the learner straight back
+    // here. Every learner created with the column default — which is false,
+    // and what both the Clerk webhook and the admin "add learner" form write —
+    // would have been stuck in that loop with no error shown. The 7 existing
+    // learners escaped it only because the flag was set for them directly:
+    // all 7 read onboarding_complete = true with a NULL
+    // onboarding_completed_at and NULL career_goal, which is the fingerprint
+    // of a flag set outside this form.
     try {
-      const db = createBrowserClient();
+      const res = await fetch('/api/complete-onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form }),
+      });
 
-      // Attempt 1: update by learner UUID (requires RLS to allow it)
-      if (learner?.id) {
-        const { error: updateError } = await db.from('learners').update({
-          career_goal: form.career_goal || null,
-          current_job_role: form.current_job_role || null,
-          bio: form.bio || null,
-          linkedin_url: form.linkedin_url || null,
-          work_preference: form.work_preference || null,
-          onboarding_complete: true,
-          onboarding_completed_at: new Date().toISOString(),
-        }).eq('id', learner.id);
-
-        if (updateError) {
-          // Attempt 2: update by clerk_user_id (different RLS path)
-          console.warn('Update by id failed, trying clerk_user_id:', updateError.message);
-          const { error: updateError2 } = await db.from('learners').update({
-            onboarding_complete: true,
-            onboarding_completed_at: new Date().toISOString(),
-            career_goal: form.career_goal || null,
-            current_job_role: form.current_job_role || null,
-            bio: form.bio || null,
-            linkedin_url: form.linkedin_url || null,
-            work_preference: form.work_preference || null,
-          }).eq('clerk_user_id', user?.id || '');
-
-          if (updateError2) {
-            // Attempt 3: use API route to bypass RLS entirely (admin client server-side)
-            console.warn('Update by clerk_user_id failed too, trying API route:', updateError2.message);
-            const res = await fetch('/api/complete-onboarding', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...form }),
-            });
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              throw new Error(err.error || `API returned ${res.status}`);
-            }
-          }
-        }
-      } else {
-        // No learner record at all — try by clerk_user_id
-        if (user?.id) {
-          const { error } = await db.from('learners').update({
-            onboarding_complete: true,
-            onboarding_completed_at: new Date().toISOString(),
-          }).eq('clerk_user_id', user.id);
-          if (error) throw new Error(error.message);
-        }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `The server returned ${res.status}.`);
       }
 
-      // Navigate to portal — use location.href for hard nav past middleware
+      // Hard navigation so the portal layout re-reads the learner row rather
+      // than rendering from a client cache that still says not-onboarded.
       window.location.href = '/portal';
-
     } catch (err: any) {
       console.error('Onboarding complete error:', err);
-      setSaveError(`Could not save: ${err.message}. Please try again or contact support.`);
-      setDebugInfo(`Error: ${err.message}`);
+      setSaveError(`Could not save: ${err.message} Please try again, or email info@upthrustdigital.com.`);
       setSaving(false);
     }
   }
