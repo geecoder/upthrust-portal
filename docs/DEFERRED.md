@@ -174,7 +174,7 @@ Consequences, all of them live wherever that value is unreplaced:
 - Every other admin screen — reviews, learners, sessions, resources — is equally unreachable.
 - `app/portal/page.tsx` never redirects an admin to `/admin`, and the admin bypass in `guardModuleForLearner` / `gateModule` never fires. Those two fail safe, so nothing is over-exposed.
 
-**Not fixed because I cannot fix it correctly:** the right value is the owner's own Clerk user id (`user_3E0U7fAsJV7lg78KZbkK2Vr8CAk` is `genesis.rotechi@gmail.com`, the likely intended admin, but choosing an admin is not my call). It also has to be set in the **Vercel** environment, not just `.env.local` — I can read neither, so whether production is affected is unverified. **Check this before Cohort 2.**
+**Not fixed because I cannot fix it correctly:** the right value is the owner's own Clerk user id, which is visible in the Clerk dashboard under Users and is deliberately not recorded here — **this repository is public**, and naming the admin account in it is disclosure with no upside. Choosing who is admin is the owner's call in any case. It also has to be set in the **Vercel** environment, not just `.env.local`. **Check this before Cohort 2.**
 
 ### D-26 · No rate limit or per-learner cap on any AI endpoint — **reported per the M3 brief, not built**
 `/api/simulation`, `/api/interview` and `/api/writing-check` each call the Anthropic API on a signed-in learner's request. A grep for rate limiting, throttling or quota logic across `app/` and `lib/` returns nothing. Any authenticated learner can call these as fast as they can issue requests, and every call bills.
@@ -193,6 +193,6 @@ Also fixed while in there: both simulation error paths returned `detail: errText
 **Still open:** a real per-learner cap. The cheapest honest version is a `ai_practice_attempts` row count per learner per day checked before the call — that table already exists and is insert-only (D-10). Worth doing before the AI tools are opened to a second cohort.
 
 ### D-27 · A placeholder learner row is in production — **found during Milestone 3**
-`learners` holds a row with `clerk_user_id = 'user_YOUR_CLERK_USER_ID'` (first name `Genesis`, `Cohort 1`, PM) alongside the real `user_3E0U7f...` Genesis row. It is one of the 7 rows every admin count and every learner tally includes, and it can never be signed in as.
+`learners` holds a row with `clerk_user_id = 'user_YOUR_CLERK_USER_ID'` (first name `Genesis`, `Cohort 1`, PM) alongside the real Genesis row. It is one of the 7 rows every admin count and every learner tally includes, and it can never be signed in as.
 
 Not deleted here: deleting production rows is the owner's call, and it is harmless beyond skewing counts by one. Recommend removing it, together with the `Testing Onboarding BA Path` row if that is also test data — note that row is the one marked `passport_eligibility = 'Approved'` and is the D-1 inconsistent passport.
