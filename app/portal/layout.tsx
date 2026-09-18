@@ -52,7 +52,13 @@ export default async function PortalLayout({ children }: { children: React.React
   // cohort — the portal sidebar is the learner view, and an admin checking what
   // learners can reach should be looking at what learners actually get. Admins
   // still reach a gated route directly by URL; see lib/module-gate.ts.
-  const access = await getModuleAccess(learner?.cohort ?? null);
+  //
+  // Scoped to the learner as well as the cohort, so an override set for this
+  // one person is what shapes their nav.
+  const access = await getModuleAccess({
+    cohort: learner?.cohort ?? null,
+    learnerId: learner?.id ?? null,
+  });
 
   return (
     <div className="portal-layout">

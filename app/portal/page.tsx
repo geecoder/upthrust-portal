@@ -70,7 +70,10 @@ export default async function DashboardPage() {
   // Resolved for this learner's cohort before anything gated is read. A
   // disabled module must not be queried at all, let alone rendered — the brief
   // is explicit that a removed module leaves no work running behind it.
-  const access = await getModuleAccess(typedLearner.cohort);
+  const access = await getModuleAccess({
+    cohort: typedLearner.cohort,
+    learnerId: typedLearner.id,
+  });
 
   const { data: assignments } = await db.from('assignments').select('*').eq('learner_id', learner.id).order('week_number');
 

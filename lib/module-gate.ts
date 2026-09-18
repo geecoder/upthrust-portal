@@ -72,7 +72,11 @@ export const getCurrentLearner = cache(async (): Promise<GateLearner | null> => 
 /** Resolved access for the signed-in person. Deduped per request. */
 export const getAccessForCurrentUser = cache(async (): Promise<ModuleAccessMap> => {
   const learner = await getCurrentLearner();
-  return getModuleAccess(learner?.cohort ?? null);
+  // Both scopes: the learner's own override beats their cohort's setting.
+  return getModuleAccess({
+    cohort: learner?.cohort ?? null,
+    learnerId: learner?.id ?? null,
+  });
 });
 
 export const currentUserIsAdmin = cache(async (): Promise<boolean> => {

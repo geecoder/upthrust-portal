@@ -73,7 +73,7 @@ async function main(): Promise<number> {
   const db = createAdminClient();
   const { data: learners, error } = await db
     .from('learners')
-    .select('clerk_user_id, first_name, last_name, cohort, pathway')
+    .select('id, clerk_user_id, first_name, last_name, cohort, pathway')
     .order('first_name');
 
   if (error) {
@@ -96,7 +96,11 @@ async function main(): Promise<number> {
 
   for (const learner of real) {
     const name = `${learner.first_name ?? ''} ${learner.last_name ?? ''}`.trim() || '(unnamed)';
-    console.log(`  ${name} — ${learner.cohort ?? 'no cohort'}, ${learner.pathway ?? '?'}`);
+    const adminTag =
+      !!process.env.ADMIN_USER_ID && learner.clerk_user_id === process.env.ADMIN_USER_ID
+        ? '  [ADMIN — bypasses every gate]'
+        : '';
+    console.log(`  ${name} — ${learner.cohort ?? 'no cohort'}, ${learner.pathway ?? '?'}${adminTag}`);
 
     // Impersonate this learner for the guard's auth() call.
     process.env.VERIFY_AS_CLERK_USER_ID = learner.clerk_user_id as string;
@@ -106,13 +110,32 @@ async function main(): Promise<number> {
     // the next. Node caches the module, so this is cheap after the first.
     const { guardModuleForCurrentUser } = await import('../lib/module-gate.ts');
 
-    const access = await getModuleAccess(learner.cohort);
+    // Full scope, not just the cohort: a per-learner override (migration 0006)
+    // must be reflected here, or this script would report the cohort's answer
+    // while the guard gives the learner's.
+    const access = await getModuleAccess({
+      cohort: learner.cohort as string | null,
+      learnerId: learner.id as string | null,
+    });
+
+    // An admin passes every gate by design (see gateModule), so their row
+    // proves the bypass rather than the 403. Without this the script fails the
+    // moment ADMIN_USER_ID names someone who also has a learner row — which is
+    // exactly what happened the first time it was set.
+    const isAdminLearner =
+      !!process.env.ADMIN_USER_ID && learner.clerk_user_id === process.env.ADMIN_USER_ID;
 
     for (const moduleKey of AI_MODULES) {
       const enabled = access[moduleKey] === true;
       const denied = await guardModuleForCurrentUser(moduleKey);
 
-      if (enabled) {
+      if (isAdminLearner && !enabled) {
+        check(
+          `${HANDLERS[moduleKey]} — flag OFF but caller is the admin, bypass allowed`,
+          denied === null,
+          `an admin should pass the gate; got HTTP ${denied?.status}`
+        );
+      } else if (enabled) {
         check(
           `${HANDLERS[moduleKey]} — flag ON, guard says proceed`,
           denied === null,

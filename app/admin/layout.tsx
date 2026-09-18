@@ -17,9 +17,10 @@ export default async function AdminLayout({
   const currentWeek = getCurrentWeek();
 
   // The admin screens share the learner sidebar, so it needs the same resolved
-  // access. Global state (no cohort) is the right view here: an admin working
-  // in /admin is looking at the product, not at one cohort's experience.
-  const access = await getModuleAccess(null);
+  // access. Global state — no cohort and no learner — is the right view here:
+  // an admin working in /admin is looking at the product, not at one cohort's
+  // or one learner's experience.
+  const access = await getModuleAccess();
 
   return (
     <div className="portal-layout">

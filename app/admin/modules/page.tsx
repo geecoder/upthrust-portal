@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic';
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import ScopeEditor, { type RosterLearner } from './ScopeEditor';
 
 interface ModuleMeta {
   key: string;
@@ -28,6 +29,8 @@ interface ModuleMeta {
 interface AccessRow {
   module_key: string;
   cohort: string | null;
+  /** Set on a per-learner override, which beats the cohort and global rows. */
+  learner_id: string | null;
   enabled: boolean;
   note: string | null;
   updated_at: string | null;
@@ -37,8 +40,10 @@ interface AuditRow {
   id: number;
   module_key: string;
   cohort: string | null;
+  learner_id: string | null;
   old_enabled: boolean | null;
-  new_enabled: boolean;
+  /** Null when the override was CLEARED and the scope now inherits. */
+  new_enabled: boolean | null;
   changed_at: string;
 }
 
@@ -46,6 +51,8 @@ export default function ModuleAccessPage() {
   const [registry, setRegistry] = useState<ModuleMeta[]>([]);
   const [rows, setRows] = useState<AccessRow[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [learners, setLearners] = useState<RosterLearner[]>([]);
+  const [openScopes, setOpenScopes] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -64,6 +71,7 @@ export default function ModuleAccessPage() {
         setRegistry(data.registry || []);
         setRows(data.rows || []);
         setAudit(data.audit || []);
+        setLearners(data.learners || []);
       }
     } catch {
       setLoadError('Could not reach the server. Check your connection and try again.');
@@ -75,14 +83,32 @@ export default function ModuleAccessPage() {
     load();
   }, [load]);
 
-  /** Global (cohort-less) state for a module. Unknown means off — fail closed. */
+  /**
+   * The GLOBAL state for a module. Unknown means off — fail closed.
+   *
+   * The `learner_id == null` test matters: a learner override also carries
+   * cohort null, so without it one learner's exception would be read as the
+   * global setting and shown on the main switch.
+   */
   function stateOf(key: string): boolean {
-    const row = rows.find((r) => r.module_key === key && r.cohort === null);
+    const row = rows.find((r) => r.module_key === key && r.cohort === null && r.learner_id == null);
     return row ? row.enabled : false;
   }
 
-  function overridesFor(key: string): AccessRow[] {
-    return rows.filter((r) => r.module_key === key && r.cohort !== null);
+  function cohortOverridesFor(key: string): AccessRow[] {
+    return rows.filter((r) => r.module_key === key && r.cohort !== null && r.learner_id == null);
+  }
+
+  function learnerOverridesFor(key: string): AccessRow[] {
+    return rows.filter((r) => r.module_key === key && r.learner_id != null);
+  }
+
+  /** A learner id is meaningless on screen; show who it is. */
+  function scopeLabelForLearner(learnerId: string): string {
+    const l = learners.find((x) => x.id === learnerId);
+    if (!l) return 'a learner (removed)';
+    const name = `${l.first_name ?? ''} ${l.last_name ?? ''}`.trim();
+    return name || l.email || 'a learner';
   }
 
   async function apply(meta: ModuleMeta, next: boolean) {
@@ -92,13 +118,18 @@ export default function ModuleAccessPage() {
 
     // Optimistic: move the switch now.
     setRows((prev) => {
-      const hit = prev.find((r) => r.module_key === meta.key && r.cohort === null);
+      const hit = prev.find((r) => r.module_key === meta.key && r.cohort === null && r.learner_id == null);
       if (hit) {
         return prev.map((r) =>
-          r.module_key === meta.key && r.cohort === null ? { ...r, enabled: next } : r
+          r.module_key === meta.key && r.cohort === null && r.learner_id == null
+            ? { ...r, enabled: next }
+            : r
         );
       }
-      return [...prev, { module_key: meta.key, cohort: null, enabled: next, note: null, updated_at: null }];
+      return [
+        ...prev,
+        { module_key: meta.key, cohort: null, learner_id: null, enabled: next, note: null, updated_at: null },
+      ];
     });
 
     try {
@@ -113,7 +144,9 @@ export default function ModuleAccessPage() {
         // Roll back visibly.
         setRows((prev) =>
           prev.map((r) =>
-            r.module_key === meta.key && r.cohort === null ? { ...r, enabled: previous } : r
+            r.module_key === meta.key && r.cohort === null && r.learner_id == null
+              ? { ...r, enabled: previous }
+              : r
           )
         );
         setBanner({
@@ -180,9 +213,11 @@ export default function ModuleAccessPage() {
       <div style={{ marginBottom: 28 }}>
         <p style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 6 }}>Admin</p>
         <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: '1.75rem', fontWeight: 400 }}>Module Access</h1>
-        <p style={{ color: 'var(--ink-muted)', marginTop: 4 }}>
-          Controls which parts of the portal learners can reach. Changes apply within a
-          minute — learners do not need to sign out.
+        <p style={{ color: 'var(--ink-muted)', marginTop: 4, lineHeight: 1.6 }}>
+          Controls which parts of the portal learners can reach. The switch on each module is
+          the <strong>global default</strong>; open <em>Cohorts &amp; learners</em> to set a
+          cohort exception to that, or an exception for one learner. Most specific wins.
+          Changes apply within a minute — learners do not need to sign out.
         </p>
       </div>
 
@@ -256,7 +291,9 @@ export default function ModuleAccessPage() {
                   .map((meta) => {
                     const on = stateOf(meta.key);
                     const saving = savingKey === meta.key;
-                    const overrides = overridesFor(meta.key);
+                    const overrides = cohortOverridesFor(meta.key);
+                    const learnerExceptions = learnerOverridesFor(meta.key);
+                    const scopesOpen = !!openScopes[meta.key];
                     return (
                       <div className="mod-row" key={meta.key}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -291,11 +328,38 @@ export default function ModuleAccessPage() {
                               {overrides.map((o) => `${o.cohort} — ${o.enabled ? 'on' : 'off'}`).join(', ')}
                             </p>
                           )}
+                          {learnerExceptions.length > 0 && (
+                            <p style={{ fontSize: '0.75rem', color: 'var(--amber-deep)', marginTop: 4, fontWeight: 600 }}>
+                              {learnerExceptions.length} individual learner exception
+                              {learnerExceptions.length === 1 ? '' : 's'}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenScopes((prev) => ({ ...prev, [meta.key]: !prev[meta.key] }))
+                            }
+                            aria-expanded={scopesOpen}
+                            className="btn btn-outline btn-sm"
+                            style={{ marginTop: 10 }}
+                          >
+                            {scopesOpen ? 'Hide cohorts & learners' : 'Cohorts & learners'}
+                          </button>
+                          {scopesOpen && (
+                            <ScopeEditor
+                              moduleKey={meta.key as Parameters<typeof ScopeEditor>[0]['moduleKey']}
+                              label={meta.label}
+                              rows={rows}
+                              learners={learners}
+                              onChanged={load}
+                              onError={(text) => setBanner({ kind: 'err', text })}
+                            />
+                          )}
                         </div>
                         <button
                           role="switch"
                           aria-checked={on}
-                          aria-label={`${meta.label} — currently ${on ? 'on' : 'off'}`}
+                          aria-label={`${meta.label} — global default, currently ${on ? 'on' : 'off'}`}
                           aria-describedby={`mod-note-${meta.key}`}
                           disabled={saving}
                           onClick={() => onToggle(meta)}
@@ -330,15 +394,32 @@ export default function ModuleAccessPage() {
                     style={{
                       display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
                       padding: '10px 14px', background: 'var(--paper-soft)', borderRadius: 6,
-                      borderLeft: `3px solid ${a.new_enabled ? 'var(--moss)' : 'var(--ink-muted)'}`,
+                      borderLeft: `3px solid ${
+                        a.new_enabled === null
+                          ? 'var(--amber)'
+                          : a.new_enabled
+                            ? 'var(--moss)'
+                            : 'var(--ink-muted)'
+                      }`,
                     }}
                   >
                     <p style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
                       {a.module_key}
-                      {a.cohort ? ` · ${a.cohort}` : ''}{' '}
+                      {/* Name the scope the change applied to. A learner id on its
+                          own tells an admin nothing, so resolve it to a name. */}
+                      <span style={{ color: 'var(--amber-deep)' }}>
+                        {a.learner_id
+                          ? ` · ${scopeLabelForLearner(a.learner_id)}`
+                          : a.cohort
+                            ? ` · ${a.cohort}`
+                            : ' · global'}
+                      </span>{' '}
                       <span style={{ fontWeight: 400, color: 'var(--ink-muted)' }}>
-                        {a.old_enabled === null ? 'created as' : `${a.old_enabled ? 'on' : 'off'} →`}{' '}
-                        {a.new_enabled ? 'on' : 'off'}
+                        {a.old_enabled === null ? 'set to' : `${a.old_enabled ? 'on' : 'off'} →`}{' '}
+                        {/* A cleared override has no new value: it now follows the
+                            level above. Rendering null as "off" would claim a
+                            decision that was actually withdrawn. */}
+                        {a.new_enabled === null ? 'cleared (inherits)' : a.new_enabled ? 'on' : 'off'}
                       </span>
                     </p>
                     <span style={{ fontSize: '0.6875rem', color: 'var(--ink-muted)' }}>

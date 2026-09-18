@@ -54,10 +54,10 @@ function isAdmin(userId: string) {
 async function denyIfModuleClosed(
   moduleKey: ModuleKey,
   userId: string,
-  learner: { cohort?: string | null } | null
+  learner: { id?: string | null; cohort?: string | null } | null
 ): Promise<NextResponse | null> {
   if (isAdmin(userId)) return null;
-  return guardModuleForLearner(moduleKey, learner);
+  return guardModuleForLearner(moduleKey, learner);  // id + cohort: see the signature
 }
 
 export async function POST(req: Request) {

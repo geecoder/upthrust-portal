@@ -72,7 +72,7 @@ async function main(): Promise<number> {
       console.log('  The application FAILS CLOSED in this state: every gated module');
       console.log('  reads as disabled, including Stakeholder Sim.\n');
       console.log('  Resolved state a learner would get right now:');
-      const resolved = resolveFromRows([], 'Cohort 1');
+      const resolved = resolveFromRows([], { cohort: 'Cohort 1' });
       for (const k of MODULE_KEYS) console.log(`    ${k.padEnd(26)} ${resolved[k] ? 'ON' : 'off'}`);
       console.log('\n  Fix: node --experimental-strip-types scripts/migrate.ts --apply');
     } else {
@@ -104,7 +104,7 @@ async function main(): Promise<number> {
 
   console.log('\n  RESOLVED PER COHORT  (what a learner in that cohort actually gets)');
   for (const c of cohorts) {
-    const resolved = resolveFromRows(rows, c);
+    const resolved = resolveFromRows(rows, { cohort: c });
     const on = MODULE_KEYS.filter((k) => resolved[k]);
     console.log(`\n    ${c ?? '(no cohort / global)'}`);
     for (const k of MODULE_KEYS) {

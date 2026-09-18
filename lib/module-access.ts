@@ -12,23 +12,37 @@
 // (scripts/verify-module-access.ts). Everything from there is re-exported here,
 // so application code only ever imports '@/lib/module-access'.
 //
-// ── SCOPE MODEL: global default + optional per-cohort override ───────────────
-// A row with cohort IS NULL is the global default for a module. A row with a
-// cohort label overrides it for that cohort only. Most specific wins.
+// ── SCOPE MODEL: global default, per-cohort override, per-learner override ──
+// Three scopes, most specific wins (see resolveFromRows):
 //
-// Why not per-learner: nothing in the brief needs it. It would turn a six-row
+//     learner_id set          this learner only
+//     cohort set              that cohort
+//     both null               the global default
+//
+// So a module can be open to a cohort and shut for one learner in it, or shut
+// to a cohort and open for one learner in it.
+//
+// THIS FILE USED TO ARGUE AGAINST THE LEARNER SCOPE, and the correction is
+// worth keeping rather than deleting. It said: "It would turn a six-row
 // settings screen into a learners x modules permissions matrix, and — the real
 // cost — it would make the flag cache learner-keyed, so the cache would hold
-// one entry per learner instead of one entry for the whole product.
+// one entry per learner instead of one entry for the whole product."
+//
+// The first half was a judgement about requirements and the requirement
+// arrived: the owner needs a module open for some learners in a cohort and not
+// others. The second half was simply wrong. The cache holds RAW ROWS, not
+// resolved maps — loadRows() reads the whole table in one query and
+// resolveFromRows() is pure and applied per request. Adding a scope therefore
+// adds no cache entries at all; it adds rows, at most one per learner per
+// module they are singled out for. 7 learners x 6 modules is 42 rows; a cohort
+// of 200 would reach 1,200, still one query.
 //
 // Why not per-programme: there is exactly one programme. A dimension with one
 // value in it is the speculative generality that ground rule 4 exists to stop.
 //
-// Why cohort earns its place: capstone unlock is genuinely per-cohort. Cohort 2
-// starts 2026-09-26 and will reach the capstone in its final weeks while a
-// later cohort is still in week 1. A single global capstone switch cannot
-// express that. Community, notifications and the AI tools are product-wide
-// decisions and will normally have only the global row.
+// Why cohort still earns its place between the two: capstone unlock is
+// genuinely per-cohort, and expressing "this whole cohort" as N learner rows
+// would be N rows to keep in step and N chances to miss one.
 //
 // ── FAILURE MODE: CLOSED ─────────────────────────────────────────────────────
 // Every path that cannot positively establish "this module is enabled" returns
@@ -59,6 +73,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from './supabase';
 import {
   MODULE_REGISTRY,
+  type AccessScope,
   type ModuleAccessMap,
   type ModuleAccessRow,
   type ModuleKey,
@@ -71,10 +86,12 @@ export {
   MODULE_KEYS,
   MODULE_REGISTRY,
   allDisabled,
+  explainFromRows,
   isModuleKey,
   resolveFromRows,
 } from './module-access-rules';
 export type {
+  AccessScope,
   LockedPresentation,
   ModuleAccessMap,
   ModuleAccessRow,
@@ -118,7 +135,7 @@ async function loadRows(): Promise<ModuleAccessRow[] | null> {
     const db = createAdminClient();
     const { data, error } = await db
       .from('module_access')
-      .select('module_key, cohort, enabled, note, updated_at, updated_by');
+      .select('module_key, cohort, learner_id, enabled, note, updated_at, updated_by');
 
     if (error) {
       if (isMissingTable(error)) {
@@ -150,18 +167,18 @@ async function loadRows(): Promise<ModuleAccessRow[] | null> {
  *
  * @param cohort the learner's cohort label, or null for "global only"
  */
-export async function getModuleAccess(cohort: string | null | undefined): Promise<ModuleAccessMap> {
+export async function getModuleAccess(scope: AccessScope = {}): Promise<ModuleAccessMap> {
   const rows = await loadRows();
   if (!rows) return allDisabled();
-  return resolveFromRows(rows, cohort);
+  return resolveFromRows(rows, scope);
 }
 
 /** Single-module convenience. Still one query, still cached. */
 export async function isModuleEnabled(
   moduleKey: ModuleKey,
-  cohort: string | null | undefined
+  scope: AccessScope = {}
 ): Promise<boolean> {
-  const map = await getModuleAccess(cohort);
+  const map = await getModuleAccess(scope);
   return map[moduleKey] === true;
 }
 
@@ -175,7 +192,7 @@ export async function isModuleEnabled(
  * structured body when they may not. Written to return-rather-than-throw so the
  * call site reads as two lines and cannot forget to stop:
  *
- *     const denied = await guardModule('community', learner?.cohort);
+ *     const denied = await guardModule('community', { cohort, learnerId });
  *     if (denied) return denied;
  *
  * The body is structured so a client can branch on `code` instead of matching
@@ -184,9 +201,9 @@ export async function isModuleEnabled(
  */
 export async function guardModule(
   moduleKey: ModuleKey,
-  cohort: string | null | undefined
+  scope: AccessScope = {}
 ): Promise<NextResponse | null> {
-  const enabled = await isModuleEnabled(moduleKey, cohort);
+  const enabled = await isModuleEnabled(moduleKey, scope);
   if (enabled) return null;
   return moduleDisabledResponse(moduleKey);
 }
@@ -210,13 +227,20 @@ export function moduleDisabledResponse(moduleKey: ModuleKey): NextResponse {
 
 /**
  * Same guard, for handlers that have already loaded the learner row.
- * Accepts anything with a cohort so callers need not import the Learner type.
+ *
+ * Takes the learner's `id` as well as their cohort, so a per-learner override
+ * applies here too. A caller that passes only a cohort gets cohort-level
+ * resolution — correct, but it would miss an exception set for that one
+ * learner, so pass the id whenever the row is in hand.
  */
 export async function guardModuleForLearner(
   moduleKey: ModuleKey,
-  learner: { cohort?: string | null } | null | undefined
+  learner: { id?: string | null; cohort?: string | null } | null | undefined
 ): Promise<NextResponse | null> {
-  return guardModule(moduleKey, learner?.cohort ?? null);
+  return guardModule(moduleKey, {
+    cohort: learner?.cohort ?? null,
+    learnerId: learner?.id ?? null,
+  });
 }
 
 // ── Admin-side reads ─────────────────────────────────────────────────────────
@@ -234,8 +258,10 @@ export async function listModuleAccessRows(): Promise<ModuleAccessRow[]> {
   const db = createAdminClient();
   const { data, error } = await db
     .from('module_access')
-    .select('module_key, cohort, enabled, note, updated_at, updated_by')
-    .order('module_key', { ascending: true });
+    .select('module_key, cohort, learner_id, enabled, note, updated_at, updated_by')
+    .order('module_key', { ascending: true })
+    .order('cohort', { ascending: true, nullsFirst: true })
+    .order('learner_id', { ascending: true, nullsFirst: true });
 
   if (error) {
     if (isMissingTable(error)) {
